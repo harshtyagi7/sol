@@ -39,15 +39,19 @@ async def run_analysis_cycle():
     async with get_session() as db:
         await agent_manager.reload_agents(db)
 
-    agents = agent_manager.get_agents()
-    if not agents:
-        logger.info("No active agents. Skipping cycle.")
-        return
-
-    # Fetch market data
+    # Fetch market data first (shared between position monitor and agents)
     snapshots = await get_market_snapshots()
     if not snapshots:
         logger.warning("No market data available. Skipping cycle.")
+        return
+
+    # Monitor open positions before proposing new strategies
+    from sol.core.position_monitor import run_position_monitor
+    await run_position_monitor(snapshots)
+
+    agents = agent_manager.get_agents()
+    if not agents:
+        logger.info("No active agents. Skipping cycle.")
         return
 
     # Get current open positions for agent context
@@ -130,7 +134,7 @@ async def run_analysis_cycle():
                 "name": proposal.name,
                 "trade_count": len(proposal.trades),
                 "max_loss_possible": proposal.max_loss_possible,
-                "rationale": proposal.rationale[:200],
+                "rationale": proposal.rationale[:200],  # type: ignore[index]
             })
             await publish_event("new_strategy_proposal", {
                 "strategy_id": strategy_id,

@@ -149,6 +149,45 @@ REJECT if: vague thesis, missing SL, poor R:R, or generic idea with no edge."""
                 logger.warning(f"[{self.name}] Review failed for '{proposal.name}': {e} — auto-approving")
             return True, f"Review error: {e}"
 
+    async def should_exit(self, position: dict, symbol_context: str) -> tuple[bool, str]:
+        """Ask Gemini whether to exit an open position."""
+        pnl = position.get("unrealized_pnl", 0)
+        avg = position.get("avg_price", 0)
+        cur = position.get("current_price", avg)
+        pnl_pct = ((cur - avg) / avg * 100) if avg else 0
+        if position.get("direction") == "SELL":
+            pnl_pct = -pnl_pct
+        ctx_snippet = symbol_context[:2000]  # type: ignore[index]
+
+        prompt = f"""Manage this open position. Should you EXIT or HOLD?
+
+{position.get('direction')} {position.get('quantity')} {position.get('exchange')}:{position.get('symbol')}
+Entry: ₹{avg:.2f} | Current: ₹{cur:.2f} | P&L: ₹{pnl:.2f} ({pnl_pct:+.2f}%)
+SL: ₹{position.get('stop_loss') or 'not set'} | TP: ₹{position.get('take_profit') or 'not set'}
+Held: {position.get('hours_held', '?')}h | Thesis: {position.get('original_rationale', 'unknown')}
+
+Market data:
+{ctx_snippet}
+
+Reply on one line only:
+EXIT: <reason>  or  HOLD: <reason>"""
+
+        model = self._get_model()
+        try:
+            response = await model.generate_content_async(prompt)
+            verdict = response.text.strip()
+            exit_now = verdict.upper().startswith("EXIT")
+            reason = verdict.split(":", 1)[-1].strip() if ":" in verdict else verdict
+            logger.info(f"[{self.name}] Exit check {position.get('symbol')}: {'EXIT' if exit_now else 'HOLD'} — {reason}")
+            return exit_now, reason
+        except Exception as e:
+            err_str = str(e)
+            if "quota" in err_str.lower() or "429" in err_str or "RESOURCE_EXHAUSTED" in err_str:
+                logger.warning(f"[{self.name}] Gemini quota hit during exit check — holding")
+            else:
+                logger.warning(f"[{self.name}] should_exit failed: {e} — holding")
+            return False, f"Error: {e}"
+
     def _parse_strategy(self, data: dict) -> StrategyProposal | None:
         try:
             trades = [

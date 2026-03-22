@@ -106,6 +106,19 @@ class BaseAgent(ABC):
         """
         return True, "No review implemented — auto-approved."
 
+    async def should_exit(
+        self,
+        position: dict,
+        symbol_context: str,
+    ) -> "tuple[bool, str]":
+        """
+        Decide whether to exit an open position this cycle.
+        Returns (exit, reason).
+        Subclasses override for real LLM-backed decision.
+        Default: always HOLD — mechanical SL/TP in position_monitor handles exits.
+        """
+        return False, "HOLD — no exit logic implemented."
+
     async def get_performance_summary(self) -> dict:
         """Return this agent's virtual performance metrics."""
         vp = self.virtual_portfolio

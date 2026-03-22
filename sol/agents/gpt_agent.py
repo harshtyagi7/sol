@@ -175,6 +175,46 @@ REJECT if: vague thesis, missing SL, poor R:R, or generic bounce play with no ed
             logger.warning(f"[{self.name}] Review failed for '{proposal.name}': {e} — auto-approving")
             return True, f"Review error: {e}"
 
+    async def should_exit(self, position: dict, symbol_context: str) -> tuple[bool, str]:
+        """Ask GPT whether to exit an open position."""
+        pnl = position.get("unrealized_pnl", 0)
+        avg = position.get("avg_price", 0)
+        cur = position.get("current_price", avg)
+        pnl_pct = ((cur - avg) / avg * 100) if avg else 0
+        if position.get("direction") == "SELL":
+            pnl_pct = -pnl_pct
+        ctx_snippet = symbol_context[:2000]  # type: ignore[index]
+
+        prompt = f"""Manage this open position. Should you EXIT or HOLD?
+
+{position.get('direction')} {position.get('quantity')} {position.get('exchange')}:{position.get('symbol')}
+Entry: ₹{avg:.2f} | Current: ₹{cur:.2f} | P&L: ₹{pnl:.2f} ({pnl_pct:+.2f}%)
+SL: ₹{position.get('stop_loss') or 'not set'} | TP: ₹{position.get('take_profit') or 'not set'}
+Held: {position.get('hours_held', '?')}h | Thesis: {position.get('original_rationale', 'unknown')}
+
+Market data:
+{ctx_snippet}
+
+Reply on one line only:
+EXIT: <reason>  or  HOLD: <reason>"""
+
+        client = self._get_client()
+        try:
+            response = await client.chat.completions.create(
+                model=self.model_id,
+                messages=[{"role": "user", "content": prompt}],
+                max_tokens=80,
+                temperature=0.1,
+            )
+            verdict = response.choices[0].message.content.strip()
+            exit_now = verdict.upper().startswith("EXIT")
+            reason = verdict.split(":", 1)[-1].strip() if ":" in verdict else verdict
+            logger.info(f"[{self.name}] Exit check {position.get('symbol')}: {'EXIT' if exit_now else 'HOLD'} — {reason}")
+            return exit_now, reason
+        except Exception as e:
+            logger.warning(f"[{self.name}] should_exit failed: {e} — holding")
+            return False, f"Error: {e}"
+
     def _parse_strategy(self, data: dict) -> StrategyProposal | None:
         try:
             trades = [

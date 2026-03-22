@@ -240,6 +240,7 @@ class ClaudeAgent(BaseAgent):
             ],
             indent=2,
         )
+        ctx_snippet = market_context[:3000]  # type: ignore[index]
         review_prompt = f"""You are a senior risk manager reviewing a strategy proposed by another agent ({proposing_agent_name}).
 
 Strategy: "{proposal.name}"
@@ -249,7 +250,7 @@ Trades:
 {trades_summary}
 
 Current market context for reference:
-{market_context[:3000]}
+{ctx_snippet}
 
 Evaluate this strategy critically. Answer APPROVED or REJECTED, then one sentence of reasoning.
 
@@ -289,6 +290,57 @@ REJECTED: <one sentence reason>"""
         except Exception as e:
             logger.warning(f"[{self.name}] Review failed for '{proposal.name}': {e} — auto-approving")
             return True, f"Review error: {e}"
+
+    async def should_exit(self, position: dict, symbol_context: str) -> tuple[bool, str]:
+        """Ask Claude whether to exit an open position."""
+        pnl = position.get("unrealized_pnl", 0)
+        avg = position.get("avg_price", 0)
+        cur = position.get("current_price", avg)
+        pnl_pct = ((cur - avg) / avg * 100) if avg else 0
+        if position.get("direction") == "SELL":
+            pnl_pct = -pnl_pct
+
+        ctx_snippet = symbol_context[:2000]  # type: ignore[index]
+        prompt = f"""You are managing an open position. Decide: EXIT now or HOLD.
+
+Position: {position.get('direction')} {position.get('quantity')} {position.get('exchange')}:{position.get('symbol')}
+Entry price: ₹{avg:.2f}
+Current price: ₹{cur:.2f}
+Unrealized P&L: ₹{pnl:.2f} ({pnl_pct:+.2f}%)
+Stop-loss: ₹{position.get('stop_loss') or 'not set'}
+Take-profit: ₹{position.get('take_profit') or 'not set'}
+Held for: {position.get('hours_held', '?')} hours
+Original thesis: {position.get('original_rationale', 'unknown')}
+
+Current market data:
+{ctx_snippet}
+
+EXIT if: thesis is broken, price action strongly against you, or you're near TP and reversal risk is high.
+HOLD if: thesis intact, normal fluctuation, trend still in your favor.
+
+Reply strictly on one line:
+EXIT: <one sentence reason>
+  or
+HOLD: <one sentence reason>"""
+
+        client = self._get_client()
+        try:
+            response = await client.messages.create(
+                model=self.model_id,
+                max_tokens=80,
+                messages=[{"role": "user", "content": prompt}],
+            )
+            verdict = response.content[0].text.strip()
+            exit_now = verdict.upper().startswith("EXIT")
+            reason = verdict.split(":", 1)[-1].strip() if ":" in verdict else verdict
+            logger.info(
+                f"[{self.name}] Position exit check {position.get('symbol')}: "
+                f"{'EXIT' if exit_now else 'HOLD'} — {reason}"
+            )
+            return exit_now, reason
+        except Exception as e:
+            logger.warning(f"[{self.name}] should_exit failed for {position.get('symbol')}: {e} — holding")
+            return False, f"Error during check: {e}"
 
     def _build_market_context(
         self, snapshots: list[MarketDataSnapshot], open_positions: list[dict]
