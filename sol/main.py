@@ -172,6 +172,18 @@ def create_app() -> FastAPI:
             "market": market_status_str(),
         }
 
+    # Serve built React frontend (production only — dev uses Vite on port 5173)
+    import os
+    frontend_dist = os.path.join(os.path.dirname(__file__), "..", "frontend", "dist")
+    if os.path.isdir(frontend_dist):
+        from fastapi.responses import FileResponse
+        app.mount("/assets", StaticFiles(directory=os.path.join(frontend_dist, "assets")), name="assets")
+
+        @app.get("/{full_path:path}", include_in_schema=False)
+        async def serve_spa(full_path: str):
+            """Catch-all: serve index.html for React SPA routing."""
+            return FileResponse(os.path.join(frontend_dist, "index.html"))
+
     return app
 
 
