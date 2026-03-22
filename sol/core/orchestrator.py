@@ -43,6 +43,12 @@ Your personality:
 - Transparent: cite which agent proposed what and why
 - Protective: flag anything unusual immediately
 
+You can reach Harsh directly on WhatsApp using the send_whatsapp tool.
+Use it proactively when something needs his attention and he may not be watching the dashboard:
+- A strategy needs urgent approval before the market window closes
+- A position is at serious risk and he should be aware
+- When Harsh explicitly asks you to notify him about something via WhatsApp
+
 When presenting strategies or proposals:
 1. Group by symbol to avoid redundant coverage
 2. Show risk:reward prominently
@@ -208,6 +214,17 @@ class SolOrchestrator:
                 "name": "trigger_agent_analysis",
                 "description": "Manually trigger all active trading agents to run a fresh market analysis cycle right now and propose strategies. Use when Harsh asks agents to analyse or find opportunities.",
                 "input_schema": {"type": "object", "properties": {}},
+            },
+            {
+                "name": "send_whatsapp",
+                "description": "Send Harsh a WhatsApp message. Use proactively when something urgent needs his attention (e.g. strategy approval window closing, position at serious risk) or when he explicitly asks to be notified via WhatsApp.",
+                "input_schema": {
+                    "type": "object",
+                    "properties": {
+                        "message": {"type": "string", "description": "The message to send to Harsh on WhatsApp."}
+                    },
+                    "required": ["message"],
+                },
             },
         ]
 
@@ -462,6 +479,15 @@ class SolOrchestrator:
                     "status": "Analysis cycle triggered",
                     "message": "All active agents are now analysing the market. New strategy proposals will appear in the Strategies tab within a minute.",
                 }
+            except Exception as e:
+                return {"error": str(e)}
+
+        elif tool_name == "send_whatsapp":
+            try:
+                from sol.notifications.whatsapp import send_whatsapp
+                message = tool_input.get("message", "")
+                success = await send_whatsapp(message)
+                return {"sent": success}
             except Exception as e:
                 return {"error": str(e)}
 
