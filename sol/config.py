@@ -46,7 +46,7 @@ class Settings(BaseSettings):
     # --- Agent Analysis Interval (minutes) ---
     AGENT_INTERVAL_MINUTES: int = 15
 
-    model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8")
+    model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8", extra="ignore")
 
     @property
     def cors_origins_list(self) -> list[str]:
