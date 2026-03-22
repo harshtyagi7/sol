@@ -31,7 +31,7 @@ def unsubscribe(q: asyncio.Queue):
 
 
 async def publish_event(event_type: str, data: Any):
-    """Broadcast an event to all connected WebSocket clients."""
+    """Broadcast an event to all connected WebSocket clients and WhatsApp."""
     payload = json.dumps({"type": event_type, "data": data}, default=str)
     dead = []
     for q in _subscribers:
@@ -44,6 +44,25 @@ async def publish_event(event_type: str, data: Any):
             dead.append(q)
     for q in dead:
         unsubscribe(q)
+
+    # Forward key events to WhatsApp (fire-and-forget)
+    try:
+        from sol.notifications.whatsapp import (
+            notify_new_strategy,
+            notify_position_closed,
+            notify_cycle_summary,
+            notify_peer_rejected,
+        )
+        if event_type == "new_strategy_proposal":
+            asyncio.create_task(notify_new_strategy(data))
+        elif event_type == "position_closed":
+            asyncio.create_task(notify_position_closed(data))
+        elif event_type == "cycle_summary":
+            asyncio.create_task(notify_cycle_summary(data))
+        elif event_type == "strategy_peer_rejected":
+            asyncio.create_task(notify_peer_rejected(data))
+    except Exception as e:
+        logger.debug(f"WhatsApp notify skipped: {e}")
 
 
 # Convenience helpers for common events

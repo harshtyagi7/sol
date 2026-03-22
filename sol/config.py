@@ -36,6 +36,12 @@ class Settings(BaseSettings):
     MAX_OPEN_POSITIONS: int = 5
     MAX_POSITION_SIZE_PCT: float = 10.0
 
+    # --- Twilio WhatsApp Notifications ---
+    TWILIO_ACCOUNT_SID: str = ""
+    TWILIO_AUTH_TOKEN: str = ""
+    TWILIO_WHATSAPP_FROM: str = "whatsapp:+14155238886"  # Twilio sandbox default
+    TWILIO_WHATSAPP_TO: str = ""  # Your WhatsApp number, e.g. whatsapp:+919876543210
+
     # --- App Settings ---
     LOG_LEVEL: Literal["DEBUG", "INFO", "WARNING", "ERROR"] = "INFO"
     CORS_ORIGINS: str = "http://localhost:3001,http://localhost:5173"
