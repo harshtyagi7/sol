@@ -1,0 +1,12 @@
+{
+  "pythonVersion": "3.11",
+  "extraPaths": ["."],
+  "exclude": ["**/node_modules", "**/__pycache__", "**/dist", "**/build"],
+  "reportMissingModuleSource": "none",
+  "reportMissingImports": "none",
+  "reportUnknownMemberType": "none",
+  "reportUnknownVariableType": "none",
+  "reportUnknownArgumentType": "none",
+  "reportOperatorIssue": "none",
+  "reportReturnType": "none"
+}

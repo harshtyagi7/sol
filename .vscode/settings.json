@@ -1,0 +1,6 @@
+{
+  "python.analysis.extraPaths": ["."],
+  "python.analysis.ignore": ["**/*"],
+  "pylance.reportMissingImports": "none",
+  "python.analysis.diagnosticMode": "off"
+}
