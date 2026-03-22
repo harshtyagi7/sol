@@ -40,11 +40,11 @@ async def verify_session():
 
 @router.get("/login")
 async def get_login_url():
-    """Returns Kite login URL. User visits this to authenticate."""
+    """Redirects to Kite login page."""
     from sol.broker.kite_client import get_kite_client
     client = get_kite_client()
     url = client.get_login_url()
-    return {"login_url": url}
+    return RedirectResponse(url=url)
 
 
 @router.get("/callback")
@@ -95,7 +95,7 @@ async def kite_callback(request_token: str):
                 user_name=str(session_data.get("user_name", "")),
             ))
 
-        return RedirectResponse(url="http://localhost:3001?auth=success")
+        return RedirectResponse(url="/?auth=success")
 
     except HTTPException:
         raise
