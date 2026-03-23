@@ -298,6 +298,29 @@ function StrategyCard({ strategy, onApprove, onReject }: {
         </div>
       )}
 
+      {/* P&L summary for completed/stopped strategies */}
+      {(strategy.status === 'COMPLETED' || strategy.status === 'MAX_LOSS_HIT' || strategy.status === 'CANCELLED') && (() => {
+        const executedTrades = strategy.trades?.filter((t: any) => t.actual_pnl != null) || []
+        if (executedTrades.length === 0) return null
+        const totalPnl = executedTrades.reduce((s: number, t: any) => s + (t.actual_pnl ?? 0), 0)
+        const wins = executedTrades.filter((t: any) => t.actual_pnl > 0).length
+        const losses = executedTrades.filter((t: any) => t.actual_pnl <= 0).length
+        return (
+          <div className={`mx-4 mb-3 rounded-lg p-3 flex items-center gap-4 ${totalPnl >= 0 ? 'bg-green-900/20 border border-green-800/30' : 'bg-red-900/20 border border-red-800/30'}`}>
+            <div>
+              <p className="text-gray-400 text-xs">Strategy P&L</p>
+              <p className={`text-xl font-bold font-mono ${totalPnl >= 0 ? 'text-green-400' : 'text-red-400'}`}>
+                {totalPnl >= 0 ? '+' : ''}₹{totalPnl.toFixed(2)}
+              </p>
+            </div>
+            <div className="text-xs text-gray-400 flex gap-3 ml-auto">
+              <span><span className="text-green-400 font-bold">{wins}W</span> / <span className="text-red-400 font-bold">{losses}L</span></span>
+              <span>{executedTrades.length} trade{executedTrades.length !== 1 ? 's' : ''} closed</span>
+            </div>
+          </div>
+        )
+      })()}
+
       {/* Status footer for non-pending */}
       {!isPending && (
         <div className="px-4 pb-3 flex items-center gap-3 text-xs text-gray-500">

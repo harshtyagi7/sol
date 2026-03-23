@@ -1,6 +1,6 @@
-import { useQuery } from '@tanstack/react-query'
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { portfolioApi } from '../api/client'
-import { TrendingUp, TrendingDown, DollarSign, Activity, AlertTriangle } from 'lucide-react'
+import { TrendingUp, TrendingDown, DollarSign, Activity, AlertTriangle, X } from 'lucide-react'
 
 interface Props { data?: any }
 
@@ -15,6 +15,73 @@ function StatCard({ title, value, sub, color = 'white', icon }: any) {
         </div>
         <div className="text-gray-600">{icon}</div>
       </div>
+    </div>
+  )
+}
+
+function OpenPositions() {
+  const queryClient = useQueryClient()
+  const { data: positions = [] } = useQuery({
+    queryKey: ['positions'],
+    queryFn: () => portfolioApi.getPositions().then(r => r.data),
+    refetchInterval: 10_000,
+  })
+
+  const closeMutation = useMutation({
+    mutationFn: (id: string) => portfolioApi.closePosition(id),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['positions'] }),
+  })
+
+  if (positions.length === 0) return null
+
+  return (
+    <div className="bg-sol-card border border-sol-border rounded-xl p-5">
+      <div className="flex items-center justify-between mb-4">
+        <h2 className="font-semibold text-white">Open Positions</h2>
+        <span className="text-xs text-gray-500">auto-refreshes every 10s</span>
+      </div>
+      <div className="space-y-2">
+        {positions.map((p: any) => {
+          const pnl = p.unrealized_pnl ?? 0
+          const pnlPct = p.avg_price ? ((p.current_price - p.avg_price) / p.avg_price * 100) * (p.direction === 'BUY' ? 1 : -1) : 0
+          return (
+            <div key={p.id} className="flex items-center gap-2 md:gap-3 bg-black/20 rounded-lg px-3 py-2.5 text-sm flex-wrap">
+              <span className={`text-xs font-bold px-1.5 py-0.5 rounded flex-shrink-0 ${p.direction === 'BUY' ? 'bg-green-900/50 text-green-400' : 'bg-red-900/50 text-red-400'}`}>
+                {p.direction}
+              </span>
+              <span className="text-white font-medium">{p.symbol}</span>
+              <span className="text-gray-500 text-xs">×{p.quantity}</span>
+              {p.is_virtual && <span className="text-xs text-blue-400 bg-blue-900/30 px-1.5 py-0.5 rounded">PAPER</span>}
+              <span className="text-gray-400 font-mono text-xs">avg ₹{Number(p.avg_price).toFixed(2)}</span>
+              {p.current_price && (
+                <span className="text-gray-300 font-mono text-xs">ltp ₹{Number(p.current_price).toFixed(2)}</span>
+              )}
+              {p.stop_loss && <span className="text-red-400 text-xs font-mono hidden sm:inline">SL ₹{Number(p.stop_loss).toFixed(2)}</span>}
+              <span className={`font-mono text-sm font-bold ml-auto ${pnl >= 0 ? 'text-green-400' : 'text-red-400'}`}>
+                {pnl >= 0 ? '+' : ''}₹{pnl.toFixed(2)}
+                <span className="text-xs font-normal ml-1 opacity-70">({pnlPct >= 0 ? '+' : ''}{pnlPct.toFixed(2)}%)</span>
+              </span>
+              <button
+                onClick={() => { if (confirm(`Close ${p.symbol} position?`)) closeMutation.mutate(p.id) }}
+                className="text-gray-600 hover:text-red-400 transition-colors flex-shrink-0"
+                title="Close position"
+              >
+                <X size={14} />
+              </button>
+            </div>
+          )
+        })}
+      </div>
+
+      {/* Unrealized total */}
+      {positions.length > 1 && (() => {
+        const total = positions.reduce((s: number, p: any) => s + (p.unrealized_pnl ?? 0), 0)
+        return (
+          <div className={`flex justify-end mt-3 pt-2 border-t border-sol-border/40 text-sm font-mono font-bold ${total >= 0 ? 'text-green-400' : 'text-red-400'}`}>
+            Total unrealized: {total >= 0 ? '+' : ''}₹{total.toFixed(2)}
+          </div>
+        )
+      })()}
     </div>
   )
 }
@@ -82,6 +149,9 @@ export default function Dashboard({ data }: Props) {
           Daily P&L: ₹{(risk.daily_pnl || 0).toFixed(2)} | Capital: ₹{(risk.capital || 0).toLocaleString('en-IN')}
         </p>
       </div>
+
+      {/* Open Positions */}
+      <OpenPositions />
 
       {/* Agent Performance */}
       {agents.length > 0 && (
