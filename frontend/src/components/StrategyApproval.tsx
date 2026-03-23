@@ -306,16 +306,46 @@ function StrategyCard({ strategy, onApprove, onReject }: {
         const wins = executedTrades.filter((t: any) => t.actual_pnl > 0).length
         const losses = executedTrades.filter((t: any) => t.actual_pnl <= 0).length
         return (
-          <div className={`mx-4 mb-3 rounded-lg p-3 flex items-center gap-4 ${totalPnl >= 0 ? 'bg-green-900/20 border border-green-800/30' : 'bg-red-900/20 border border-red-800/30'}`}>
-            <div>
-              <p className="text-gray-400 text-xs">Strategy P&L</p>
-              <p className={`text-xl font-bold font-mono ${totalPnl >= 0 ? 'text-green-400' : 'text-red-400'}`}>
-                {totalPnl >= 0 ? '+' : ''}₹{totalPnl.toFixed(2)}
-              </p>
+          <div className="mx-4 mb-3 rounded-lg overflow-hidden border border-sol-border/50">
+            {/* Header */}
+            <div className={`px-3 py-2.5 flex items-center justify-between ${totalPnl >= 0 ? 'bg-green-900/20' : 'bg-red-900/20'}`}>
+              <p className="text-gray-300 text-sm font-medium">P&L Summary</p>
+              <div className="flex items-center gap-3 text-xs text-gray-400">
+                <span><span className="text-green-400 font-bold">{wins}W</span> / <span className="text-red-400 font-bold">{losses}L</span></span>
+                <span className={`text-base font-bold font-mono ${totalPnl >= 0 ? 'text-green-400' : 'text-red-400'}`}>
+                  {totalPnl >= 0 ? '+' : ''}₹{totalPnl.toFixed(2)}
+                </span>
+              </div>
             </div>
-            <div className="text-xs text-gray-400 flex gap-3 ml-auto">
-              <span><span className="text-green-400 font-bold">{wins}W</span> / <span className="text-red-400 font-bold">{losses}L</span></span>
-              <span>{executedTrades.length} trade{executedTrades.length !== 1 ? 's' : ''} closed</span>
+            {/* Per-trade rows */}
+            <div className="bg-black/20 divide-y divide-sol-border/20">
+              {executedTrades.map((t: any) => {
+                const pnl = t.actual_pnl ?? 0
+                return (
+                  <div key={t.id} className="flex items-center gap-2 px-3 py-2 text-xs">
+                    <span className={`font-bold px-1.5 py-0.5 rounded flex-shrink-0 ${t.direction === 'BUY' ? 'bg-green-900/50 text-green-400' : 'bg-red-900/50 text-red-400'}`}>
+                      {t.direction}
+                    </span>
+                    <span className="text-white font-medium">{t.symbol}</span>
+                    <span className="text-gray-500">×{t.quantity}</span>
+                    {t.entry_price != null && (
+                      <span className="text-gray-500 font-mono">@ ₹{Number(t.entry_price).toFixed(2)}</span>
+                    )}
+                    <span className={`ml-auto font-mono font-bold ${pnl >= 0 ? 'text-green-400' : 'text-red-400'}`}>
+                      {pnl >= 0 ? '+' : ''}₹{pnl.toFixed(2)}
+                    </span>
+                  </div>
+                )
+              })}
+              {/* Total row */}
+              {executedTrades.length > 1 && (
+                <div className="flex items-center justify-between px-3 py-2 bg-black/30">
+                  <span className="text-gray-500 text-xs">{executedTrades.length} trades closed</span>
+                  <span className={`font-mono font-bold text-sm ${totalPnl >= 0 ? 'text-green-400' : 'text-red-400'}`}>
+                    Total: {totalPnl >= 0 ? '+' : ''}₹{totalPnl.toFixed(2)}
+                  </span>
+                </div>
+              )}
             </div>
           </div>
         )

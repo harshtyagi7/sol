@@ -189,6 +189,7 @@ async def _close_position(position, cur_price: float, pnl: float, status: str, r
                 result = await db.execute(_sel(StrategyTrade).where(StrategyTrade.id == position.proposal_id))
                 trade = result.scalar_one_or_none()
                 if trade and trade.strategy_id:
+                    trade.actual_pnl = pnl
                     executor = get_strategy_executor()
                     await executor.on_trade_closed(trade.strategy_id, pnl)
         except Exception as e:
