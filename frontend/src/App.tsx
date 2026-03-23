@@ -17,9 +17,8 @@ function LoginScreen() {
     queryFn: () => authApi.getStatus().then(r => r.data),
   })
 
-  const handleLogin = async () => {
-    const res = await authApi.getLoginUrl()
-    window.location.href = res.data.login_url
+  const handleLogin = () => {
+    window.location.href = '/api/auth/login'
   }
 
   if (isLoading) {
