@@ -151,7 +151,7 @@ export default function App() {
   return (
     <div className="min-h-screen bg-sol-dark flex flex-col">
       {/* Top Bar */}
-      <header className="border-b border-sol-border bg-sol-card px-6 py-3 flex items-center justify-between">
+      <header className="border-b border-sol-border bg-sol-card px-4 md:px-6 py-3 flex items-center justify-between">
         <div className="flex items-center gap-3">
           <span className="text-xl font-bold text-white">⚡ Sol</span>
           {/* Trading mode dropdown */}
@@ -165,7 +165,7 @@ export default function App() {
               }`}
             >
               {modeMutation.isPending ? <Loader2 size={10} className="animate-spin" /> : null}
-              {mode} MODE
+              {mode}
               <ChevronDown size={11} />
             </button>
             {modeDropdownOpen && (
@@ -204,27 +204,27 @@ export default function App() {
             )}
           </div>
         </div>
-        <div className="flex items-center gap-4 text-sm">
+        <div className="flex items-center gap-2 md:gap-4 text-sm">
           <span className={`flex items-center gap-1 ${market.is_open ? 'text-sol-green' : 'text-gray-500'}`}>
-            <span className={`w-2 h-2 rounded-full ${market.is_open ? 'bg-sol-green animate-pulse' : 'bg-gray-500'}`} />
-            {market.status || 'Loading...'}
+            <span className={`w-2 h-2 rounded-full flex-shrink-0 ${market.is_open ? 'bg-sol-green animate-pulse' : 'bg-gray-500'}`} />
+            <span className="hidden sm:inline">{market.status || 'Loading...'}</span>
           </span>
-          <span className="text-gray-500 font-mono text-xs">{market.time_ist}</span>
-          <span className="text-gray-500 text-xs">{authData.user_name}</span>
-          {connected ? <Wifi size={14} className="text-sol-green" /> : <WifiOff size={14} className="text-sol-red" />}
+          <span className="hidden md:inline text-gray-500 font-mono text-xs">{market.time_ist}</span>
+          <span className="hidden sm:inline text-gray-500 text-xs truncate max-w-[100px]">{authData.user_name}</span>
+          {connected ? <Wifi size={14} className="text-sol-green flex-shrink-0" /> : <WifiOff size={14} className="text-sol-red flex-shrink-0" />}
         </div>
       </header>
 
       {/* Notifications */}
       {notifications.length > 0 && (
-        <div className="bg-yellow-900/20 border-b border-yellow-800/30 px-6 py-2">
-          <p className="text-yellow-300 text-sm">{notifications[0]}</p>
+        <div className="bg-yellow-900/20 border-b border-yellow-800/30 px-4 md:px-6 py-2">
+          <p className="text-yellow-300 text-xs md:text-sm truncate">{notifications[0]}</p>
         </div>
       )}
 
-      <div className="flex flex-1">
-        {/* Sidebar */}
-        <nav className="w-52 border-r border-sol-border bg-sol-card p-4 flex flex-col gap-1">
+      <div className="flex flex-1 overflow-hidden">
+        {/* Sidebar — desktop only */}
+        <nav className="hidden md:flex w-52 border-r border-sol-border bg-sol-card p-4 flex-col gap-1 flex-shrink-0">
           {tabs.map(tab => (
             <button
               key={tab.id}
@@ -247,7 +247,7 @@ export default function App() {
         </nav>
 
         {/* Content */}
-        <main className="flex-1 overflow-auto p-6">
+        <main className="flex-1 overflow-auto p-3 md:p-6 pb-20 md:pb-6">
           {activeTab === 'dashboard' && <Dashboard data={dashboardData} />}
           {activeTab === 'strategies' && <StrategyApprovalView />}
           {activeTab === 'agents' && <AgentComparison />}
@@ -255,6 +255,27 @@ export default function App() {
           {activeTab === 'risk' && <RiskConfig />}
         </main>
       </div>
+
+      {/* Bottom nav — mobile only */}
+      <nav className="md:hidden fixed bottom-0 left-0 right-0 bg-sol-card border-t border-sol-border flex z-40">
+        {tabs.map(tab => (
+          <button
+            key={tab.id}
+            onClick={() => setActiveTab(tab.id)}
+            className={`flex-1 flex flex-col items-center gap-0.5 py-2 relative transition-colors ${
+              activeTab === tab.id ? 'text-sol-accent' : 'text-gray-500'
+            }`}
+          >
+            {tab.icon}
+            <span className="text-[10px]">{tab.label}</span>
+            {tab.badge ? (
+              <span className="absolute top-1 right-1/4 bg-sol-accent text-white text-[9px] rounded-full w-4 h-4 flex items-center justify-center">
+                {tab.badge > 9 ? '9+' : tab.badge}
+              </span>
+            ) : null}
+          </button>
+        ))}
+      </nav>
     </div>
   )
 }

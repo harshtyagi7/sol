@@ -36,7 +36,7 @@ export default function Dashboard({ data }: Props) {
       <h1 className="text-2xl font-bold text-white">Dashboard</h1>
 
       {/* Stats */}
-      <div className="grid grid-cols-4 gap-4">
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 md:gap-4">
         <StatCard
           title="Available Capital"
           value={`₹${(portfolio.available_capital || 0).toLocaleString('en-IN')}`}

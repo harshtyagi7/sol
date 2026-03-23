@@ -74,7 +74,7 @@ export default function ChatInterface() {
   }
 
   return (
-    <div className="flex flex-col h-[calc(100vh-120px)]">
+    <div className="flex flex-col" style={{ height: 'calc(100dvh - 130px)' }}>
       <h1 className="text-2xl font-bold text-white mb-4">Chat with Sol</h1>
 
       {/* Messages */}
