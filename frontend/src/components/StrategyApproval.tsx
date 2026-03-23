@@ -300,53 +300,71 @@ function StrategyCard({ strategy, onApprove, onReject }: {
 
       {/* P&L summary for completed/stopped strategies */}
       {(strategy.status === 'COMPLETED' || strategy.status === 'MAX_LOSS_HIT' || strategy.status === 'CANCELLED') && (() => {
-        const executedTrades = strategy.trades?.filter((t: any) => t.actual_pnl != null) || []
-        if (executedTrades.length === 0) return null
-        const totalPnl = executedTrades.reduce((s: number, t: any) => s + (t.actual_pnl ?? 0), 0)
-        const wins = executedTrades.filter((t: any) => t.actual_pnl > 0).length
-        const losses = executedTrades.filter((t: any) => t.actual_pnl <= 0).length
+        const allTrades = strategy.trades || []
+        const executedTrades = allTrades.filter((t: any) => t.status === 'EXECUTED')
+        const cancelledTrades = allTrades.filter((t: any) => t.status === 'CANCELLED' || t.status === 'SKIPPED')
+        if (allTrades.length === 0) return null
+        const closedTrades = executedTrades.filter((t: any) => t.actual_pnl != null)
+        const totalPnl = closedTrades.reduce((s: number, t: any) => s + (t.actual_pnl ?? 0), 0)
+        const wins = closedTrades.filter((t: any) => t.actual_pnl > 0).length
+        const losses = closedTrades.filter((t: any) => t.actual_pnl <= 0).length
+        const hasPnl = closedTrades.length > 0
         return (
           <div className="mx-4 mb-3 rounded-lg overflow-hidden border border-sol-border/50">
             {/* Header */}
-            <div className={`px-3 py-2.5 flex items-center justify-between ${totalPnl >= 0 ? 'bg-green-900/20' : 'bg-red-900/20'}`}>
-              <p className="text-gray-300 text-sm font-medium">P&L Summary</p>
+            <div className={`px-3 py-2.5 flex items-center justify-between ${hasPnl ? (totalPnl >= 0 ? 'bg-green-900/20' : 'bg-red-900/20') : 'bg-gray-800/40'}`}>
+              <p className="text-gray-300 text-sm font-medium">Trade Summary</p>
               <div className="flex items-center gap-3 text-xs text-gray-400">
-                <span><span className="text-green-400 font-bold">{wins}W</span> / <span className="text-red-400 font-bold">{losses}L</span></span>
-                <span className={`text-base font-bold font-mono ${totalPnl >= 0 ? 'text-green-400' : 'text-red-400'}`}>
-                  {totalPnl >= 0 ? '+' : ''}₹{totalPnl.toFixed(2)}
-                </span>
+                {hasPnl && (
+                  <span><span className="text-green-400 font-bold">{wins}W</span> / <span className="text-red-400 font-bold">{losses}L</span></span>
+                )}
+                {hasPnl ? (
+                  <span className={`text-base font-bold font-mono ${totalPnl >= 0 ? 'text-green-400' : 'text-red-400'}`}>
+                    {totalPnl >= 0 ? '+' : ''}₹{totalPnl.toFixed(2)}
+                  </span>
+                ) : (
+                  <span className="text-gray-500 text-xs">{executedTrades.length} executed · {cancelledTrades.length} skipped</span>
+                )}
               </div>
             </div>
             {/* Per-trade rows */}
-            <div className="bg-black/20 divide-y divide-sol-border/20">
-              {executedTrades.map((t: any) => {
-                const pnl = t.actual_pnl ?? 0
-                return (
-                  <div key={t.id} className="flex items-center gap-2 px-3 py-2 text-xs">
-                    <span className={`font-bold px-1.5 py-0.5 rounded flex-shrink-0 ${t.direction === 'BUY' ? 'bg-green-900/50 text-green-400' : 'bg-red-900/50 text-red-400'}`}>
-                      {t.direction}
-                    </span>
-                    <span className="text-white font-medium">{t.symbol}</span>
-                    <span className="text-gray-500">×{t.quantity}</span>
-                    {t.entry_price != null && (
-                      <span className="text-gray-500 font-mono">@ ₹{Number(t.entry_price).toFixed(2)}</span>
-                    )}
-                    <span className={`ml-auto font-mono font-bold ${pnl >= 0 ? 'text-green-400' : 'text-red-400'}`}>
-                      {pnl >= 0 ? '+' : ''}₹{pnl.toFixed(2)}
+            {allTrades.length > 0 && (
+              <div className="bg-black/20 divide-y divide-sol-border/20">
+                {allTrades.map((t: any) => {
+                  const pnl = t.actual_pnl
+                  const isSkipped = t.status === 'CANCELLED' || t.status === 'SKIPPED' || t.status === 'PENDING' || t.status === 'FAILED'
+                  return (
+                    <div key={t.id} className={`flex items-center gap-2 px-3 py-2 text-xs ${isSkipped ? 'opacity-40' : ''}`}>
+                      <span className={`font-bold px-1.5 py-0.5 rounded flex-shrink-0 ${t.direction === 'BUY' ? 'bg-green-900/50 text-green-400' : 'bg-red-900/50 text-red-400'}`}>
+                        {t.direction}
+                      </span>
+                      <span className="text-white font-medium">{t.symbol}</span>
+                      <span className="text-gray-500">×{t.quantity}</span>
+                      {t.entry_price != null && (
+                        <span className="text-gray-500 font-mono">@ ₹{Number(t.entry_price).toFixed(2)}</span>
+                      )}
+                      <span className="text-gray-600 ml-1">{t.status}</span>
+                      {pnl != null ? (
+                        <span className={`ml-auto font-mono font-bold ${pnl >= 0 ? 'text-green-400' : 'text-red-400'}`}>
+                          {pnl >= 0 ? '+' : ''}₹{pnl.toFixed(2)}
+                        </span>
+                      ) : (
+                        <span className="ml-auto text-gray-600 font-mono">—</span>
+                      )}
+                    </div>
+                  )
+                })}
+                {/* Total row */}
+                {hasPnl && allTrades.length > 1 && (
+                  <div className="flex items-center justify-between px-3 py-2 bg-black/30">
+                    <span className="text-gray-500 text-xs">{closedTrades.length} of {allTrades.length} trades closed</span>
+                    <span className={`font-mono font-bold text-sm ${totalPnl >= 0 ? 'text-green-400' : 'text-red-400'}`}>
+                      Total: {totalPnl >= 0 ? '+' : ''}₹{totalPnl.toFixed(2)}
                     </span>
                   </div>
-                )
-              })}
-              {/* Total row */}
-              {executedTrades.length > 1 && (
-                <div className="flex items-center justify-between px-3 py-2 bg-black/30">
-                  <span className="text-gray-500 text-xs">{executedTrades.length} trades closed</span>
-                  <span className={`font-mono font-bold text-sm ${totalPnl >= 0 ? 'text-green-400' : 'text-red-400'}`}>
-                    Total: {totalPnl >= 0 ? '+' : ''}₹{totalPnl.toFixed(2)}
-                  </span>
-                </div>
-              )}
-            </div>
+                )}
+              </div>
+            )}
           </div>
         )
       })()}
