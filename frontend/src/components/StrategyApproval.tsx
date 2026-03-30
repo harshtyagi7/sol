@@ -409,6 +409,12 @@ export default function StrategyApprovalView() {
       queryClient.invalidateQueries({ queryKey: ['strategies'] })
       queryClient.invalidateQueries({ queryKey: ['dashboard'] })
     },
+    onError: (err: any) => {
+      const detail = err?.response?.data?.detail || ''
+      if (detail.toLowerCase().includes('stale')) {
+        alert(`⚠️ Entry prices are stale — market has moved since this was proposed.\n\n${detail}\n\nReject this strategy and wait for a fresh proposal.`)
+      }
+    },
   })
 
   const rejectMutation = useMutation({

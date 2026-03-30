@@ -380,6 +380,17 @@ HOLD: <one sentence reason>"""
     ) -> str:
         lines = ["## Market Analysis Request\n"]
 
+        # Inject current market regime
+        try:
+            from sol.core.market_regime import get_current_regime, REGIME_GUIDANCE
+            regime, reason = get_current_regime()
+            guidance = REGIME_GUIDANCE.get(regime, "")
+            if guidance:
+                lines.append(f"### {guidance}")
+                lines.append(f"Regime basis: {reason}\n")
+        except Exception:
+            pass
+
         if open_positions:
             lines.append("### Active Positions (already in market)")
             for p in open_positions:

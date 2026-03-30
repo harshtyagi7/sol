@@ -70,6 +70,68 @@ class StrategyService:
 
             return strategy.id
 
+    async def _check_staleness(self, strategy_id: str) -> Optional[str]:
+        """
+        Check if trade entry prices are still valid at approval time.
+        Returns an error string if stale, None if OK.
+        """
+        from sol.database import get_session
+        from sol.models.strategy import StrategyTrade
+        from sol.broker.price_store import get_price
+        from sqlalchemy import select
+
+        async with get_session() as db:
+            result = await db.execute(
+                select(StrategyTrade).where(
+                    StrategyTrade.strategy_id == strategy_id,
+                    StrategyTrade.status == "PENDING",
+                )
+            )
+            trades = result.scalars().all()
+
+        stale = []
+        for trade in trades:
+            if trade.entry_price is None:
+                continue  # MARKET order — no staleness check possible
+
+            entry = float(trade.entry_price)
+            sl = float(trade.stop_loss) if trade.stop_loss else None
+            tp = float(trade.take_profit) if trade.take_profit else None
+
+            # Try price store (in-memory cache updated each cycle)
+            key = f"{trade.exchange}:{trade.symbol}"
+            current = get_price(key)
+            if current is None:
+                continue  # No price data — skip check rather than block
+
+            current = float(current)
+            threshold = 0.01  # 1% max adverse move from intended entry
+
+            if trade.direction == "BUY":
+                if sl and current <= sl:
+                    stale.append(f"{trade.symbol}: price ₹{current:.2f} already at/below SL ₹{sl:.2f}")
+                elif tp and current >= tp:
+                    stale.append(f"{trade.symbol}: price ₹{current:.2f} already at/above TP ₹{tp:.2f}")
+                elif current > entry * (1 + threshold):
+                    stale.append(
+                        f"{trade.symbol}: price ₹{current:.2f} is {((current/entry)-1)*100:.1f}% "
+                        f"above proposed entry ₹{entry:.2f} — entry missed, R:R broken"
+                    )
+            else:  # SELL
+                if sl and current >= sl:
+                    stale.append(f"{trade.symbol}: price ₹{current:.2f} already at/above SL ₹{sl:.2f}")
+                elif tp and current <= tp:
+                    stale.append(f"{trade.symbol}: price ₹{current:.2f} already at/below TP ₹{tp:.2f}")
+                elif current < entry * (1 - threshold):
+                    stale.append(
+                        f"{trade.symbol}: price ₹{current:.2f} is {((entry/current)-1)*100:.1f}% "
+                        f"below proposed entry ₹{entry:.2f} — entry missed, R:R broken"
+                    )
+
+        if stale:
+            return "Stale entry prices: " + "; ".join(stale)
+        return None
+
     async def approve(self, strategy_id: str, max_loss_approved: float, note: Optional[str] = None) -> dict:
         """
         User approves a strategy with a loss cap.
@@ -82,6 +144,10 @@ class StrategyService:
 
         if max_loss_approved <= 0:
             return {"success": False, "reason": "max_loss_approved must be greater than 0"}
+
+        stale_reason = await self._check_staleness(strategy_id)
+        if stale_reason:
+            return {"success": False, "reason": stale_reason, "stale": True}
 
         async with get_session() as db:
             result = await db.execute(select(Strategy).where(Strategy.id == strategy_id))

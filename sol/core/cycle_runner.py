@@ -45,6 +45,13 @@ async def run_analysis_cycle():
         logger.warning("No market data available. Skipping cycle.")
         return
 
+    # Detect market regime from NIFTY 50 snapshot before running agents
+    from sol.core.market_regime import detect_regime, set_regime
+    nifty_snap = next((s for s in snapshots if s.symbol in ("NIFTY 50", "NIFTY50", "NIFTY")), None)
+    if nifty_snap:
+        regime, reason = detect_regime(nifty_snap)
+        set_regime(regime, reason)
+
     # Monitor open positions before proposing new strategies
     from sol.core.position_monitor import run_position_monitor
     await run_position_monitor(snapshots)

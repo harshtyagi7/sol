@@ -50,6 +50,15 @@ async def run_position_monitor():
         logger.error(f"Position monitor error: {e}", exc_info=True)
 
 
+async def _run_trail():
+    """Called at 2:00 PM — trail profitable MIS stops to breakeven."""
+    try:
+        from sol.core.position_monitor import trail_intraday_to_breakeven
+        await trail_intraday_to_breakeven()
+    except Exception as e:
+        logger.error(f"Intraday trail error: {e}")
+
+
 async def run_eod_squareoff():
     """Called at 3:20 PM to square off intraday positions."""
     logger.info("EOD square-off starting...")
@@ -151,6 +160,14 @@ def setup_scheduler():
             hour="9-15", minute="*", day_of_week="mon-fri", timezone=IST
         ),
         id="position_monitor",
+        replace_existing=True,
+    )
+
+    # 2:00 PM trail — move SL to breakeven for profitable MIS positions
+    scheduler.add_job(
+        _run_trail,
+        CronTrigger(hour=14, minute=0, day_of_week="mon-fri", timezone=IST),
+        id="intraday_trail",
         replace_existing=True,
     )
 

@@ -17,6 +17,56 @@ logger = logging.getLogger(__name__)
 IST = pytz.timezone("Asia/Kolkata")
 
 
+async def trail_intraday_to_breakeven() -> None:
+    """
+    Called at 2:00 PM — for all profitable open MIS positions, move SL to entry
+    price (breakeven). This locks in that we won't turn a winning intraday trade
+    into a loss in the final hour of trading.
+    """
+    from sol.database import get_session
+    from sol.models.position import Position
+    from sqlalchemy import select
+
+    try:
+        async with get_session() as db:
+            result = await db.execute(
+                select(Position).where(
+                    Position.status == "OPEN",
+                    Position.product_type == "MIS",
+                )
+            )
+            positions = result.scalars().all()
+
+        trailed = 0
+        for pos in positions:
+            pnl = pos.unrealized_pnl
+            if pnl <= 0:
+                continue  # Only trail profitable positions
+
+            entry = float(pos.avg_price)
+            current_sl = float(pos.stop_loss) if pos.stop_loss else None
+
+            # Only move SL if current SL is below entry (for BUY) or above (for SELL)
+            should_trail = False
+            if pos.direction == "BUY" and (current_sl is None or current_sl < entry):
+                should_trail = True
+            elif pos.direction == "SELL" and (current_sl is None or current_sl > entry):
+                should_trail = True
+
+            if should_trail:
+                async with get_session() as db:
+                    result = await db.execute(select(Position).where(Position.id == pos.id))
+                    p = result.scalar_one_or_none()
+                    if p and p.status == "OPEN":
+                        p.stop_loss = entry
+                        trailed += 1
+
+        if trailed:
+            logger.info(f"[2PM Trail] Moved SL to breakeven for {trailed} profitable MIS position(s)")
+    except Exception as e:
+        logger.error(f"[2PM Trail] Error: {e}")
+
+
 async def run_position_monitor(snapshots: list) -> None:
     """Called from cycle_runner once per cycle, before new strategy proposals."""
     try:
