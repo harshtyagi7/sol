@@ -124,6 +124,14 @@ Zerodha Kite connection:
 
 Active trading agents:
 {agents_section}
+
+Scheduled jobs (all times IST, Mon-Fri):
+  - 8:45 AM — Kite session check (internal alert if not authenticated)
+  - 9:00 AM — WhatsApp reminder to Harsh: login link + dashboard URL if not authenticated, else ready message
+  - 9:15 AM onward — Agent analysis cycle every 15 min until 3:15 PM
+  - Every minute 9:15–3:30 PM — Position monitor (SL/TP checks)
+  - 3:20 PM — EOD square-off of intraday positions
+  - 3:35 PM — EOD report generation
 --- End Context ---
 """
         return _SOL_BASE_PROMPT + context
