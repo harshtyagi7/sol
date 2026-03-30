@@ -86,6 +86,34 @@ async def check_kite_session():
         logger.error(f"Session check error: {e}")
 
 
+async def send_morning_login_reminder():
+    """Called at 9:00 AM — WhatsApp reminder to login to Sol before market opens."""
+    try:
+        from sol.broker.kite_client import get_kite_client
+        from sol.notifications.whatsapp import send_whatsapp
+        from sol.config import get_settings
+
+        client = get_kite_client()
+        settings = get_settings()
+        app_url = settings.APP_URL.rstrip("/")
+
+        if client.is_authenticated():
+            msg = (
+                f"☀️ Good morning! Sol is ready.\n"
+                f"Kite session is active — market opens at 9:15 AM.\n"
+                f"📊 Dashboard: {app_url}"
+            )
+        else:
+            msg = (
+                f"⚠️ Sol needs you to login before the market opens.\n"
+                f"👉 Login here: {app_url}/api/auth/login\n\n"
+                f"Market opens at 9:15 AM IST."
+            )
+        await send_whatsapp(msg)
+    except Exception as e:
+        logger.error(f"Morning reminder error: {e}")
+
+
 def setup_scheduler():
     """Register all scheduled jobs."""
     scheduler = get_scheduler()
@@ -95,6 +123,14 @@ def setup_scheduler():
         check_kite_session,
         CronTrigger(hour=8, minute=45, day_of_week="mon-fri", timezone=IST),
         id="session_check",
+        replace_existing=True,
+    )
+
+    # Morning WhatsApp reminder — 9:00 AM IST on weekdays
+    scheduler.add_job(
+        send_morning_login_reminder,
+        CronTrigger(hour=9, minute=0, day_of_week="mon-fri", timezone=IST),
+        id="morning_reminder",
         replace_existing=True,
     )
 

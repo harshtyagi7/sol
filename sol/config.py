@@ -36,6 +36,9 @@ class Settings(BaseSettings):
     MAX_OPEN_POSITIONS: int = 5
     MAX_POSITION_SIZE_PCT: float = 10.0
 
+    # --- App URL (used in notifications) ---
+    APP_URL: str = "https://168.144.18.90.nip.io"
+
     # --- Twilio WhatsApp Notifications ---
     TWILIO_ACCOUNT_SID: str = ""
     TWILIO_AUTH_TOKEN: str = ""
