@@ -120,20 +120,60 @@ class BaseAgent(ABC):
         return False, "HOLD — no exit logic implemented."
 
     async def get_performance_summary(self) -> dict:
-        """Return this agent's virtual performance metrics."""
+        """Return this agent's performance metrics from the DB."""
+        try:
+            from sol.database import get_session  # type: ignore[import]
+            from sol.models.position import Position  # type: ignore[import]
+            from sqlalchemy import select
+
+            async with get_session() as db:
+                result = await db.execute(
+                    select(Position).where(
+                        Position.agent_id == self.agent_id,
+                        Position.status != "OPEN",
+                    )
+                )
+                closed = result.scalars().all()
+
+            total_pnl = sum(float(p.realized_pnl or 0) for p in closed)
+            wins = sum(1 for p in closed if float(p.realized_pnl or 0) > 0)
+            win_rate = round(wins / len(closed) * 100, 1) if closed else 0.0
+            open_result = await self._count_open_positions()
+        except Exception:
+            total_pnl = 0.0
+            closed = []
+            win_rate = 0.0
+            open_result = 0
+
         vp = self.virtual_portfolio
         return {
             "agent_id": self.agent_id,
             "agent_name": self.name,
             "model_id": self.model_id,
             "virtual_capital_initial": vp.initial_capital,
-            "virtual_capital_current": round(vp.total_value, 2),
-            "total_pnl": round(vp.total_pnl, 2),
-            "total_pnl_pct": round(vp.total_pnl / vp.initial_capital * 100, 2),
-            "open_positions": len(vp.positions),
-            "closed_trades": len(vp.closed_trades),
-            "win_rate": round(vp.win_rate, 2),
+            "total_pnl": round(total_pnl, 2),
+            "total_pnl_pct": round(total_pnl / vp.initial_capital * 100, 2),
+            "open_positions": open_result,
+            "closed_trades": len(closed),
+            "win_rate": win_rate,
         }
+
+    async def _count_open_positions(self) -> int:
+        try:
+            from sol.database import get_session  # type: ignore[import]
+            from sol.models.position import Position  # type: ignore[import]
+            from sqlalchemy import select, func
+
+            async with get_session() as db:
+                result = await db.execute(
+                    select(func.count(Position.id)).where(
+                        Position.agent_id == self.agent_id,
+                        Position.status == "OPEN",
+                    )
+                )
+                return result.scalar() or 0
+        except Exception:
+            return 0
 
     def __repr__(self) -> str:
         return f"<Agent name={self.name} model={self.model_id}>"
