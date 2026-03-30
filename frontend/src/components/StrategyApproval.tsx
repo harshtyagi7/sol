@@ -138,13 +138,16 @@ function StrategyCard({ strategy, onApprove, onReject }: {
   onReject: (id: string, note: string) => void
 }) {
   const [expanded, setExpanded] = useState(strategy.status === 'PENDING_APPROVAL')
-  const [maxLoss, setMaxLoss] = useState(strategy.max_loss_possible?.toFixed(0) || '')
+  const [maxLoss, setMaxLoss] = useState(
+    strategy.max_loss_possible > 0 ? String(Math.floor(strategy.max_loss_possible)) : ''
+  )
   const [note, setNote] = useState('')
   const [showBacktest, setShowBacktest] = useState(false)
   const isPending = strategy.status === 'PENDING_APPROVAL'
 
   const maxLossNum = parseFloat(maxLoss)
-  const maxLossValid = maxLossNum > 0 && maxLossNum <= strategy.max_loss_possible
+  const hasCap = strategy.max_loss_possible > 0
+  const maxLossValid = maxLossNum > 0 && (!hasCap || maxLossNum <= strategy.max_loss_possible)
   const lossProgress = strategy.max_loss_approved
     ? Math.min(100, (strategy.actual_loss / strategy.max_loss_approved) * 100)
     : 0
@@ -255,10 +258,10 @@ function StrategyCard({ strategy, onApprove, onReject }: {
                 type="number"
                 value={maxLoss}
                 onChange={e => setMaxLoss(e.target.value)}
-                placeholder={`e.g. ${Math.round(strategy.max_loss_possible * 0.5)}`}
+                placeholder={hasCap ? `e.g. ${Math.round(strategy.max_loss_possible * 0.5) || 100}` : 'e.g. 500'}
                 className="w-full bg-gray-800 border border-sol-border rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-sol-accent font-mono"
                 min={1}
-                max={strategy.max_loss_possible}
+                max={hasCap ? strategy.max_loss_possible : undefined}
               />
             </div>
             <div className="flex-1">
@@ -274,7 +277,9 @@ function StrategyCard({ strategy, onApprove, onReject }: {
 
           {maxLoss && !maxLossValid && (
             <p className="text-red-400 text-xs">
-              {maxLossNum <= 0 ? 'Must be greater than 0' : `Cannot exceed ₹${strategy.max_loss_possible?.toFixed(0)}`}
+              {maxLossNum <= 0
+                ? 'Must be greater than 0'
+                : `Cannot exceed ₹${strategy.max_loss_possible?.toFixed(2)}`}
             </p>
           )}
 
