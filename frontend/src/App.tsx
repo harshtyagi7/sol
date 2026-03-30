@@ -7,9 +7,10 @@ import StrategyApprovalView from './components/StrategyApproval'
 import AgentComparison from './components/AgentComparison'
 import ChatInterface from './components/ChatInterface'
 import RiskConfig from './components/RiskConfig'
-import { LayoutDashboard, Bot, TrendingUp, MessageSquare, Shield, Wifi, WifiOff, LogIn, Loader2, ChevronDown } from 'lucide-react'
+import TradeBook from './components/TradeBook'
+import { LayoutDashboard, Bot, TrendingUp, MessageSquare, Shield, BookOpen, Wifi, WifiOff, LogIn, Loader2, ChevronDown } from 'lucide-react'
 
-type Tab = 'dashboard' | 'strategies' | 'agents' | 'chat' | 'risk'
+type Tab = 'dashboard' | 'strategies' | 'agents' | 'chat' | 'risk' | 'trades'
 
 function LoginScreen() {
   const { data: authData, isLoading } = useQuery({
@@ -143,6 +144,7 @@ export default function App() {
   const tabs: { id: Tab; label: string; icon: React.ReactNode; badge?: number }[] = [
     { id: 'dashboard', label: 'Dashboard', icon: <LayoutDashboard size={18} /> },
     { id: 'strategies', label: 'Strategies', icon: <TrendingUp size={18} />, badge: pending },
+    { id: 'trades', label: 'Trades', icon: <BookOpen size={18} /> },
     { id: 'agents', label: 'Agents', icon: <Bot size={18} /> },
     { id: 'chat', label: 'Chat Sol', icon: <MessageSquare size={18} /> },
     { id: 'risk', label: 'Risk', icon: <Shield size={18} /> },
@@ -250,6 +252,7 @@ export default function App() {
         <main className="flex-1 overflow-auto p-3 md:p-6 pb-20 md:pb-6">
           {activeTab === 'dashboard' && <Dashboard data={dashboardData} />}
           {activeTab === 'strategies' && <StrategyApprovalView />}
+          {activeTab === 'trades' && <TradeBook />}
           {activeTab === 'agents' && <AgentComparison />}
           {activeTab === 'chat' && <ChatInterface />}
           {activeTab === 'risk' && <RiskConfig />}

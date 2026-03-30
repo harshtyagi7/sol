@@ -68,6 +68,45 @@ async def close_position(position_id: str):
     return {"success": True, "order_id": order_id, "realized_pnl": pos.realized_pnl}
 
 
+@router.get("/trades")
+async def get_trades(limit: int = 100):
+    """All closed/exited positions — the trade history book."""
+    from sol.database import get_session
+    from sol.models.position import Position
+    from sqlalchemy import select
+
+    async with get_session() as db:
+        result = await db.execute(
+            select(Position)
+            .where(Position.status != "OPEN")
+            .order_by(Position.closed_at.desc())
+            .limit(limit)
+        )
+        positions = result.scalars().all()
+        return [
+            {
+                "id": p.id,
+                "symbol": p.symbol,
+                "exchange": p.exchange,
+                "direction": p.direction,
+                "quantity": p.quantity,
+                "product_type": p.product_type,
+                "option_type": p.option_type,
+                "avg_price": float(p.avg_price),
+                "close_price": float(p.close_price) if p.close_price else None,
+                "stop_loss": float(p.stop_loss) if p.stop_loss else None,
+                "take_profit": float(p.take_profit) if p.take_profit else None,
+                "realized_pnl": float(p.realized_pnl) if p.realized_pnl is not None else None,
+                "status": p.status,
+                "agent_name": p.agent_name,
+                "is_virtual": p.is_virtual,
+                "opened_at": p.opened_at,
+                "closed_at": p.closed_at,
+            }
+            for p in positions
+        ]
+
+
 @router.get("/summary")
 async def portfolio_summary():
     """Aggregated portfolio summary — real + virtual."""

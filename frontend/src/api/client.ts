@@ -27,6 +27,7 @@ export const strategiesApi = {
 export const portfolioApi = {
   getSummary: () => api.get('/portfolio/summary'),
   getPositions: () => api.get('/portfolio/positions'),
+  getTrades: () => api.get('/portfolio/trades'),
   closePosition: (id: string) => api.post(`/portfolio/positions/${id}/close`),
 }
 
