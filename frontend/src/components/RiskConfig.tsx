@@ -150,7 +150,7 @@ export default function RiskConfig() {
           value={maxCapitalPct}
           onChange={setMaxCapitalPct}
           min={0.5}
-          max={10}
+          max={100}
           step={0.5}
           capitalRs={capital ?? undefined}
         />
