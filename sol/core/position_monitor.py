@@ -245,6 +245,16 @@ async def _close_position(position, cur_price: float, pnl: float, status: str, r
         except Exception as e:
             logger.warning(f"[PositionMonitor] Could not update strategy loss for {position.symbol}: {e}")
 
+    # Recalibrate confidence threshold based on updated win rate
+    if position.agent_id:
+        try:
+            from sol.core.agent_feedback import recalibrate_agent_threshold
+            new_threshold = await recalibrate_agent_threshold(position.agent_id)
+            if new_threshold is not None:
+                logger.info(f"[PositionMonitor] Agent {position.agent_id} threshold recalibrated → {new_threshold}%")
+        except Exception as e:
+            logger.warning(f"[PositionMonitor] Threshold recalibration error for {position.agent_id}: {e}")
+
     await publish_event("position_closed", {
         "symbol": position.symbol,
         "status": status,

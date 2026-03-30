@@ -215,11 +215,12 @@ class ClaudeAgent(BaseAgent):
         self,
         market_snapshots: list[MarketDataSnapshot],
         open_positions: list[dict],
+        performance_context: str = "",
     ) -> list[StrategyProposal]:
         if not market_snapshots:
             return []
 
-        market_context = self._build_market_context(market_snapshots, open_positions)
+        market_context = self._build_market_context(market_snapshots, open_positions, performance_context)
         client = self._get_client()
 
         try:
@@ -376,9 +377,13 @@ HOLD: <one sentence reason>"""
             return False, f"Error during check: {e}"
 
     def _build_market_context(
-        self, snapshots: list[MarketDataSnapshot], open_positions: list[dict]
+        self, snapshots: list[MarketDataSnapshot], open_positions: list[dict], performance_context: str = ""
     ) -> str:
         lines = ["## Market Analysis Request\n"]
+
+        # Inject agent's own recent performance so it can learn from past decisions
+        if performance_context:
+            lines.append(performance_context)
 
         # Inject current market regime
         try:

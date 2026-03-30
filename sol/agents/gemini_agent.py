@@ -39,6 +39,7 @@ class GeminiAgent(BaseAgent):
         self,
         market_snapshots: list[MarketDataSnapshot],
         open_positions: list[dict],
+        performance_context: str = "",
     ) -> list[StrategyProposal]:
         if not market_snapshots:
             return []
@@ -46,7 +47,7 @@ class GeminiAgent(BaseAgent):
         from sol.agents.claude_agent import ClaudeAgent
         dummy = ClaudeAgent.__new__(ClaudeAgent)
         dummy.name = self.name
-        market_context = dummy._build_market_context(market_snapshots, open_positions)
+        market_context = dummy._build_market_context(market_snapshots, open_positions, performance_context)
         model = self._get_model()
 
         prompt = (

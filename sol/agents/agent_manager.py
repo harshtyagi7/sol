@@ -119,7 +119,9 @@ class AgentManager:
 
         async def run_agent(agent: BaseAgent):
             try:
-                proposals = await agent.analyze_and_propose(market_snapshots, open_positions)
+                from sol.core.agent_feedback import get_performance_context
+                perf_ctx = await get_performance_context(agent.agent_id)
+                proposals = await agent.analyze_and_propose(market_snapshots, open_positions, perf_ctx)
                 logger.info(f"[{agent.name}] Proposed {len(proposals)} trades")
                 return agent.agent_id, proposals
             except Exception as e:

@@ -86,6 +86,7 @@ class BaseAgent(ABC):
         self,
         market_snapshots: list[MarketDataSnapshot],
         open_positions: list[dict],
+        performance_context: str = "",
     ) -> "list[StrategyProposal]":  # noqa: F821
         """
         Analyze market data and return strategy proposals.
