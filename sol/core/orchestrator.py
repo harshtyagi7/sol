@@ -642,10 +642,14 @@ Keep it under 200 words. Be direct.
         from sol.models.session import ChatMessage
         from sqlalchemy import select
         result = await db_session.execute(
-            select(ChatMessage).order_by(ChatMessage.created_at.desc()).limit(20)
+            select(ChatMessage).order_by(ChatMessage.created_at.desc()).limit(21)
         )
         messages = list(reversed(result.scalars().all()))
-        return [{"role": m.role, "content": m.content} for m in messages]
+        # The API endpoint saves the current user message to DB before calling chat(),
+        # so _load_history would include it. Strip it here — the orchestrator appends it.
+        if messages and messages[-1].role == "user":
+            messages = messages[:-1]
+        return [{"role": m.role, "content": m.content} for m in messages[-20:]]
 
     async def _save_messages(self, db_session, user_msg: str, assistant_msg: str):
         from sol.models.session import ChatMessage
