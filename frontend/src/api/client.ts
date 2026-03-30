@@ -22,6 +22,7 @@ export const strategiesApi = {
   reject: (id: string, note?: string) =>
     api.post(`/strategies/${id}/reject`, null, { params: note ? { note } : {} }),
   backtest: (id: string) => api.post(`/strategies/${id}/backtest`),
+  clearAll: () => api.post('/strategies/clear-all'),
 }
 
 export const portfolioApi = {

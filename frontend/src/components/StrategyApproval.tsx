@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { strategiesApi } from '../api/client'
-import { CheckCircle, XCircle, ChevronDown, ChevronUp, AlertTriangle, Clock, FlaskConical, Loader2 } from 'lucide-react'
+import { CheckCircle, XCircle, ChevronDown, ChevronUp, AlertTriangle, Clock, FlaskConical, Loader2, Trash2 } from 'lucide-react'
 
 const STATUS_COLORS: Record<string, string> = {
   PENDING_APPROVAL: 'bg-yellow-900/40 text-yellow-300 border-yellow-700/40',
@@ -138,7 +138,7 @@ function StrategyCard({ strategy, onApprove, onReject }: {
   onReject: (id: string, note: string) => void
 }) {
   const [expanded, setExpanded] = useState(strategy.status === 'PENDING_APPROVAL')
-  const [maxLoss, setMaxLoss] = useState('')
+  const [maxLoss, setMaxLoss] = useState(strategy.max_loss_possible?.toFixed(0) || '')
   const [note, setNote] = useState('')
   const [showBacktest, setShowBacktest] = useState(false)
   const isPending = strategy.status === 'PENDING_APPROVAL'
@@ -415,6 +415,14 @@ export default function StrategyApprovalView() {
     },
   })
 
+  const clearAllMutation = useMutation({
+    mutationFn: () => strategiesApi.clearAll(),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['strategies'] })
+      queryClient.invalidateQueries({ queryKey: ['dashboard'] })
+    },
+  })
+
   const strategies = showAll ? all : pending
 
   return (
@@ -428,12 +436,26 @@ export default function StrategyApprovalView() {
             </span>
           )}
         </h1>
-        <button
-          onClick={() => setShowAll(!showAll)}
-          className="text-sm text-gray-400 hover:text-white border border-sol-border px-3 py-1.5 rounded-lg"
-        >
-          {showAll ? 'Show Pending' : 'Show All'}
-        </button>
+        <div className="flex items-center gap-2">
+          <button
+            onClick={() => setShowAll(!showAll)}
+            className="text-sm text-gray-400 hover:text-white border border-sol-border px-3 py-1.5 rounded-lg"
+          >
+            {showAll ? 'Show Pending' : 'Show All'}
+          </button>
+          <button
+            onClick={() => {
+              if (confirm('Delete all pending, completed, and cancelled strategies? Active strategies will not be affected.')) {
+                clearAllMutation.mutate()
+              }
+            }}
+            disabled={clearAllMutation.isPending}
+            className="flex items-center gap-1.5 text-sm text-red-400 hover:text-red-300 border border-red-900/50 hover:border-red-700/70 px-3 py-1.5 rounded-lg disabled:opacity-40 transition-colors"
+          >
+            {clearAllMutation.isPending ? <Loader2 size={13} className="animate-spin" /> : <Trash2 size={13} />}
+            Clear All
+          </button>
+        </div>
       </div>
 
       {strategies.length === 0 && (

@@ -54,6 +54,25 @@ async def reject_strategy(strategy_id: str, note: Optional[str] = None):
     return result
 
 
+@router.post("/clear-all")
+async def clear_all_strategies():
+    """Cancel and delete all non-active strategies (PENDING_APPROVAL and already-done ones)."""
+    from sol.database import get_session
+    from sol.models.strategy import Strategy, StrategyTrade
+    from sqlalchemy import select, delete
+
+    async with get_session() as db:
+        result = await db.execute(
+            select(Strategy).where(Strategy.status.in_(["PENDING_APPROVAL", "COMPLETED", "CANCELLED", "MAX_LOSS_HIT"]))
+        )
+        strategies = result.scalars().all()
+        ids = [s.id for s in strategies]
+        if ids:
+            await db.execute(delete(StrategyTrade).where(StrategyTrade.strategy_id.in_(ids)))
+            await db.execute(delete(Strategy).where(Strategy.id.in_(ids)))
+    return {"deleted": len(ids)}
+
+
 @router.post("/{strategy_id}/backtest")
 async def backtest_strategy(strategy_id: str):
     """Run the strategy's trades against 90 days of historical OHLCV and return win/loss stats."""
