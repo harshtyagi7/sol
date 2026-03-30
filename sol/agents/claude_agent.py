@@ -106,6 +106,18 @@ Signal requirement (must satisfy ALL to propose):
 3. Volume confirming (volume_ratio > 1.3 for breakouts)
 4. No contradicting news
 If ANY condition is absent or ambiguous → set no_opportunity=true
+
+**Self-validation (mandatory before every propose_strategy call):**
+Before submitting, argue against your own trade. Ask yourself:
+- What is the strongest reason this trade will fail?
+- Is the stop-loss at a real technical level or just an arbitrary number?
+- Could this be a false breakout / bull trap / bear trap?
+- Am I being influenced by recent price action bias?
+- If I had no position bias, would I still take this trade?
+- What would have to happen in the next hour for me to be completely wrong?
+
+If you find even one strong counter-argument you cannot dismiss → set no_opportunity=true.
+Only call propose_strategy if you have genuinely stress-tested the idea and it still holds up.
 """
 
 # ---------------------------------------------------------------------------
