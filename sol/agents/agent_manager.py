@@ -37,14 +37,14 @@ def build_agent(agent_record) -> Optional[BaseAgent]:
             "google":    GEMINI_STRATEGY_PROMPT,
         }.get(provider, DEFAULT_STRATEGY_PROMPT)
 
-    # Inject confidence threshold from config_json (default 60%)
+    # Inject confidence threshold from config_json (default 92%)
     config = agent_record.config_json or {}
-    min_confidence = int(config.get("min_confidence", 75))
+    min_confidence = int(config.get("min_confidence", 92))
     custom_prompt = (
         (custom_prompt or "").rstrip()
         + f"\n\nConfidence threshold: Only call propose_strategy if your conviction is "
-        f"≥{min_confidence}%. If you are less than {min_confidence}% confident in the setup, "
-        f"set no_opportunity=true instead. Partial conviction = no trade.\n"
+        f"≥{min_confidence}%. If you are less than {min_confidence}% confident — for any reason "
+        f"— set no_opportunity=true. When uncertain, always choose no_opportunity=true.\n"
     )
 
     kwargs = dict(
