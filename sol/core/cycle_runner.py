@@ -135,6 +135,16 @@ async def run_analysis_cycle():
             strategy_id = await strategy_service.save_strategy(
                 proposal, agent_id, agent.name, is_virtual
             )
+
+            # Auto-backtest to compute win rate for notification gating
+            backtest_win_rate = None
+            try:
+                from sol.services.backtest_service import backtest_strategy as run_backtest
+                bt = await run_backtest(strategy_id)
+                backtest_win_rate = bt.get("overall", {}).get("win_rate_pct")
+            except Exception as e:
+                logger.warning(f"[CycleRunner] Backtest failed for {strategy_id}: {e}")
+
             saved_strategies.append({
                 "id": strategy_id,
                 "agent_name": agent.name,
@@ -149,6 +159,7 @@ async def run_analysis_cycle():
                 "name": proposal.name,
                 "trade_count": len(proposal.trades),
                 "max_loss_possible": proposal.max_loss_possible,
+                "backtest_win_rate": backtest_win_rate,
             })
             logger.info(
                 f"[{agent.name}] Strategy '{proposal.name}' saved ({len(proposal.trades)} trades, "

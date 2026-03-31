@@ -4,14 +4,30 @@ Sends alerts for key trading events: new strategies, position closes, cycle summ
 """
 
 import logging
+from datetime import date
 
 import httpx
 
 logger = logging.getLogger(__name__)
 
+DAILY_LIMIT = 10
+_sent_count: int = 0
+_sent_date: date = date.min
+
 
 async def send_whatsapp(message: str) -> bool:
     """Send a WhatsApp message via Twilio REST API. Returns True on success."""
+    global _sent_count, _sent_date
+
+    today = date.today()
+    if _sent_date != today:
+        _sent_count = 0
+        _sent_date = today
+
+    if _sent_count >= DAILY_LIMIT:
+        logger.warning(f"[WhatsApp] Daily limit of {DAILY_LIMIT} messages reached — skipping")
+        return False
+
     from sol.config import get_settings
     s = get_settings()
 
@@ -31,7 +47,8 @@ async def send_whatsapp(message: str) -> bool:
                 },
             )
         if resp.status_code in (200, 201):
-            logger.debug(f"[WhatsApp] Sent: {message[:80]}")
+            _sent_count += 1
+            logger.debug(f"[WhatsApp] Sent ({_sent_count}/{DAILY_LIMIT}): {message[:80]}")
             return True
         else:
             logger.warning(f"[WhatsApp] Twilio error {resp.status_code}: {resp.text[:200]}")
@@ -48,6 +65,14 @@ def _fmt_inr(amount: float) -> str:
 
 
 async def notify_new_strategy(event: dict) -> None:
+    win_rate = event.get("backtest_win_rate")
+    if win_rate is None or win_rate < 70:
+        logger.debug(
+            f"[WhatsApp] Skipping strategy notification — backtest win rate "
+            f"{win_rate}% < 70% (strategy: {event.get('name', '?')})"
+        )
+        return
+
     name = event.get("name", "?")
     agent = event.get("agent", "?")
     trades = event.get("trade_count", 0)
@@ -56,6 +81,7 @@ async def notify_new_strategy(event: dict) -> None:
         f"📋 *New Strategy Pending Approval*\n"
         f"Agent: {agent}\n"
         f"Strategy: {name}\n"
+        f"Backtest win rate: {win_rate}%\n"
         f"Trades: {trades} | Max loss: {_fmt_inr(max_loss)}\n"
         f"→ Open Sol to approve or reject."
     )
