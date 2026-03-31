@@ -144,6 +144,7 @@ class StrategyExecutor:
 
                 # Create position record
                 actual_qty = risk_report.modified_quantity or trade.quantity
+                entry = float(trade.entry_price or 0)
                 position = Position(
                     proposal_id=trade_id,
                     agent_id=trade.agent_id,
@@ -154,7 +155,8 @@ class StrategyExecutor:
                     direction=trade.direction,
                     product_type=trade.product_type,
                     quantity=actual_qty,
-                    avg_price=float(trade.entry_price or 0),
+                    avg_price=entry,
+                    current_price=entry,  # initialise so P&L shows 0 until first LTP update
                     stop_loss=float(trade.stop_loss) if trade.stop_loss else None,
                     take_profit=float(trade.take_profit) if trade.take_profit else None,
                     opened_at=datetime.now(IST),
