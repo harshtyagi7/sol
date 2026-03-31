@@ -12,6 +12,18 @@ from fastapi.staticfiles import StaticFiles
 
 from sol.config import get_settings
 
+# Configure standard logging so all modules using logging.getLogger() are visible
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s [%(levelname)-8s] %(name)s: %(message)s",
+    datefmt="%Y-%m-%d %H:%M:%S",
+)
+# Suppress noisy third-party loggers
+logging.getLogger("httpx").setLevel(logging.WARNING)
+logging.getLogger("httpcore").setLevel(logging.WARNING)
+logging.getLogger("hpack").setLevel(logging.WARNING)
+logging.getLogger("apscheduler").setLevel(logging.WARNING)
+
 # Configure structured logging
 structlog.configure(
     wrapper_class=structlog.make_filtering_bound_logger(logging.INFO),
