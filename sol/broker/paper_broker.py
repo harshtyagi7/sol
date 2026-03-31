@@ -68,7 +68,7 @@ class PaperBroker:
 
         pos = self._positions[key]
         if transaction_type == "BUY":
-            total_cost = pos["average_price"] * pos["quantity"] + fill_price * quantity
+            total_cost = pos["average_price"] * pos["quantity"] + float(fill_price) * quantity
             pos["quantity"] += quantity
             pos["average_price"] = total_cost / pos["quantity"] if pos["quantity"] else 0
         else:
