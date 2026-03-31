@@ -111,7 +111,7 @@ async def inject_test_strategy():
         # Pick first liquid stock from watchlist
         snap = next((s for s in snapshots if s.symbol != "NIFTY 50"), snapshots[0]) if snapshots else None
         symbol = snap.symbol if snap else "DIXON"
-        price = float(snap.ltp or snap.close or 100) if snap else 15000.0
+        price = float(snap.current_price or 100) if snap else 15000.0
 
         sl = round(price * 1.02, 2)   # 2% above for short
         tp = round(price * 0.94, 2)   # 6% below for short
