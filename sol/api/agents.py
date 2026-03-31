@@ -128,11 +128,11 @@ async def inject_test_strategy():
             description=f"Test strategy for flow validation — {symbol} intraday short",
             rationale="Injected test strategy — not a real signal",
             duration_days=1,
-            status="PENDING",
             is_virtual=True,
             max_loss_possible=500.0,
             max_loss_approved=500.0,
             proposed_at=now,
+            status="PENDING_APPROVAL",
         )
         db.add(strategy)
         await db.flush()
