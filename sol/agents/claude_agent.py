@@ -59,6 +59,10 @@ STRATEGY_TOOL = {
                 "type": "boolean",
                 "description": "Set to true if no clear strategy exists right now",
             },
+            "reason": {
+                "type": "string",
+                "description": "Required when no_opportunity=true: explain in one sentence why you are passing this cycle",
+            },
         },
         "required": [],
     },
@@ -236,6 +240,10 @@ class ClaudeAgent(BaseAgent):
             for block in response.content:
                 if block.type == "tool_use" and block.name == "propose_strategy":
                     if block.input.get("no_opportunity"):
+                        # Log the full tool input so we can see the agent's reasoning
+                        reason = block.input.get("reason") or block.input.get("rationale") or ""
+                        logger.info(f"[{self.name}] NO_OPPORTUNITY — {reason or '(no reason given)'}")
+                        logger.debug(f"[{self.name}] Full tool input: {block.input}")
                         return []
                     strategy_data = block.input.get("strategy")
                     if strategy_data:

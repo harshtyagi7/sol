@@ -50,6 +50,7 @@ GPT_TOOLS = [
                         "required": ["name", "description", "rationale", "duration_days", "trades"],
                     },
                     "no_opportunity": {"type": "boolean"},
+                    "reason": {"type": "string", "description": "Required when no_opportunity=true: why you are passing this cycle"},
                 },
             },
         },
@@ -108,6 +109,9 @@ class GPTAgent(BaseAgent):
             if msg.tool_calls:
                 args = json.loads(msg.tool_calls[0].function.arguments)
                 if args.get("no_opportunity"):
+                    reason = args.get("reason") or args.get("rationale") or ""
+                    logger.info(f"[{self.name}] NO_OPPORTUNITY — {reason or '(no reason given)'}")
+                    logger.debug(f"[{self.name}] Full args: {args}")
                     return []
                 strategy_data = args.get("strategy")
                 if strategy_data:
