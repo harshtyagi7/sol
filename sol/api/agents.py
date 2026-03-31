@@ -92,6 +92,15 @@ async def agent_performance(agent_id: str):
     return await agent.get_performance_summary()
 
 
+@router.post("/trigger-cycle")
+async def trigger_full_cycle():
+    """Manually trigger a full analysis cycle (all agents → save strategies → backtest → notify)."""
+    import asyncio
+    from sol.core.cycle_runner import run_analysis_cycle
+    asyncio.create_task(run_analysis_cycle())
+    return {"status": "cycle started"}
+
+
 @router.post("/{agent_id}/trigger")
 async def trigger_agent(agent_id: str):
     """Manually trigger a single agent's analysis cycle."""
