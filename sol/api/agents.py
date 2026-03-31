@@ -1,6 +1,6 @@
 """Agent management endpoints."""
 
-from fastapi import APIRouter, BackgroundTasks, HTTPException
+from fastapi import APIRouter, HTTPException
 
 from sol.schemas.agent import AgentCreate, AgentOut, AgentUpdate
 
@@ -93,10 +93,12 @@ async def agent_performance(agent_id: str):
 
 
 @router.post("/trigger-cycle")
-async def trigger_full_cycle(background_tasks: BackgroundTasks):
+async def trigger_full_cycle():
     """Manually trigger a full analysis cycle (all agents → save strategies → backtest → notify)."""
+    import asyncio
     from sol.core.cycle_runner import run_analysis_cycle
-    background_tasks.add_task(run_analysis_cycle)
+    loop = asyncio.get_event_loop()
+    loop.create_task(run_analysis_cycle())
     return {"status": "cycle started"}
 
 
