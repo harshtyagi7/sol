@@ -74,7 +74,9 @@ _BASE_RULES = """
 Strategy design rules:
 - Every trade MUST have a stop-loss. No exceptions.
 - Risk:reward MINIMUM 1:3 per trade — only propose if the reward is at least 3× the risk
-- Only liquid NIFTY 50 stocks — no mid-caps, no small-caps, no illiquid names
+- Only trade stocks from the watchlist — mid/small-cap names where retail trading dominates
+- Do NOT propose trades on NIFTY 50 or NIFTY BANK index themselves — use them only to assess market direction
+- Avoid F&O on individual stocks — stick to equity (MIS or CNC)
 - Maximum 1 trade per strategy — one high-conviction idea only
 - At least 3 independent signals must align before proposing (e.g. trend + momentum + volume + news)
 - If signals conflict or are mixed → set no_opportunity=true
@@ -83,11 +85,10 @@ Strategy design rules:
 - F&O → product_type=NRML, exchange=NFO
 
 Position sizing — HARD LIMITS (strictly enforced):
-- Equity: max ₹50,000 notional per trade (entry_price × quantity ≤ 50,000)
-- F&O options: max 1 lot per trade (NIFTY lot=50, BANKNIFTY lot=15)
-- F&O futures: max 1 lot per trade
+- Equity: max ₹75,000 notional per trade (entry_price × quantity ≤ 75,000)
 - Max risk per trade = (entry − stop_loss) × quantity ≤ ₹3,000
-- If a stock price is high (e.g. ₹2,000+), use SMALL quantity (e.g. 5–20 shares)
+- If a stock price is high (e.g. ₹1,000+), use SMALL quantity (e.g. 10–50 shares)
+- For low-priced stocks (₹100–500), quantity can be 50–200 shares within the notional limit
 
 F&O rules:
 - PCR > 1.2 = bullish index sentiment; PCR < 0.8 = bearish

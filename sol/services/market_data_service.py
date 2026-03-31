@@ -18,16 +18,33 @@ from sol.broker.price_store import set_price
 logger = logging.getLogger(__name__)
 IST = pytz.timezone("Asia/Kolkata")
 
-# Default watchlist
+# Default watchlist — mid/small-cap stocks where retail trading dominates.
+# Deliberately avoids Nifty 50 heavyweights that are saturated with institutional
+# algos and HFTs. These Nifty Midcap/Smallcap names still show clean technical
+# patterns because most participants are human traders and small fund managers.
+# NIFTY 50 is kept solely for market regime detection — agents do not trade it.
 DEFAULT_WATCHLIST = [
-    ("RELIANCE", "NSE"),
-    ("INFY", "NSE"),
-    ("TCS", "NSE"),
-    ("HDFCBANK", "NSE"),
-    ("ICICIBANK", "NSE"),
-    ("SBIN", "NSE"),
+    # --- Index (regime detection only, not traded) ---
     ("NIFTY 50", "NSE"),
-    ("NIFTY BANK", "NSE"),
+
+    # --- Nifty Midcap 100 — liquid, retail-driven ---
+    ("DIXON", "NSE"),           # Electronics EMS — strong momentum stock
+    ("IRCTC", "NSE"),           # Rail ticketing monopoly — clean patterns
+    ("PERSISTENT", "NSE"),      # Mid-cap IT — trending well
+    ("VOLTAS", "NSE"),          # Consumer durables — seasonal patterns
+    ("TATACOMM", "NSE"),        # Telecom infrastructure — range-bound patterns
+    ("GODREJPROP", "NSE"),      # Real estate — news-driven moves
+    ("FEDERALBNK", "NSE"),      # Private bank — underanalysed
+    ("RADICO", "NSE"),          # Spirits FMCG — steady patterns
+    ("KFINTECH", "NSE"),        # Fintech mid-cap — low algo coverage
+    ("ANGELONE", "NSE"),        # Broking — retail sentiment proxy
+
+    # --- Nifty Smallcap 100 — even less algo penetration ---
+    ("RVNL", "NSE"),            # Rail infra PSU — high retail interest
+    ("IRFC", "NSE"),            # Rail finance — steady trending
+    ("SJVN", "NSE"),            # Power PSU — low volatility patterns
+    ("RAILTEL", "NSE"),         # Rail telecom — low coverage
+    ("HFCL", "NSE"),            # Telecom products — breakout history
 ]
 
 # Some symbols have different tradingsymbol values in the Kite instruments list
@@ -326,10 +343,12 @@ async def _get_paper_snapshots(symbols: list[tuple[str, str]]) -> list[MarketDat
     news_map = await get_news_for_symbols(symbol_list)
 
     base_prices = {
-        "RELIANCE": 2850.0, "INFY": 1750.0, "TCS": 4200.0,
-        "HDFCBANK": 1680.0, "ICICIBANK": 1280.0, "SBIN": 820.0,
-        "NIFTY 50": 24500.0, "NIFTY BANK": 52000.0, "BANKNIFTY": 52000.0,
-        "WIPRO": 520.0, "HCLTECH": 1950.0,
+        "NIFTY 50": 24500.0, "NIFTY BANK": 52000.0,
+        "DIXON": 15000.0, "IRCTC": 780.0, "PERSISTENT": 5200.0,
+        "VOLTAS": 1450.0, "TATACOMM": 1700.0, "GODREJPROP": 2800.0,
+        "FEDERALBNK": 195.0, "RADICO": 2100.0, "KFINTECH": 980.0,
+        "ANGELONE": 2800.0, "RVNL": 420.0, "IRFC": 185.0,
+        "SJVN": 110.0, "RAILTEL": 380.0, "HFCL": 120.0,
     }
 
     snapshots = []
