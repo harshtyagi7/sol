@@ -96,23 +96,28 @@ async def run_position_monitor(snapshots: list) -> None:
 
 
 async def _get_current_price(symbol: str, exchange: str, snap_map: dict):
-    snap = snap_map.get(symbol)
-    if snap is not None:
-        return float(snap.current_price)
-
+    # Always try live Kite LTP first — works in both PAPER and LIVE mode
     try:
         from sol.broker.kite_client import get_kite_client  # type: ignore[import]
         client = get_kite_client()
-        if not client.is_authenticated():
-            return None
-        s = symbol.upper()
-        key = f"NFO:{s}" if (s.endswith("CE") or s.endswith("PE") or s.endswith("FUT")) else f"{exchange}:{s}"
-        quotes = client.get_ltp([key])
-        ltp = quotes.get(key, {}).get("last_price")
-        return float(ltp) if ltp is not None else None
+        if client.is_authenticated():
+            s = symbol.upper()
+            key = f"NFO:{s}" if (s.endswith("CE") or s.endswith("PE") or s.endswith("FUT")) else f"{exchange}:{s}"
+            quotes = client.get_ltp([key])
+            ltp = quotes.get(key, {}).get("last_price")
+            if ltp:
+                from sol.broker.price_store import set_price
+                set_price(key, float(ltp))
+                return float(ltp)
     except Exception as e:
-        logger.warning(f"[PositionMonitor] Could not fetch LTP for {symbol}: {e}")
-        return None
+        logger.warning(f"[PositionMonitor] Kite LTP failed for {symbol}: {e}")
+
+    # Fall back to snapshot (paper mode without Kite session)
+    snap = snap_map.get(symbol)
+    if snap is not None and snap.current_price:
+        return float(snap.current_price)
+
+    return None
 
 
 async def _check_position(position, snap_map: dict) -> None:
