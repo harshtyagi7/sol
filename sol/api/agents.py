@@ -92,6 +92,67 @@ async def agent_performance(agent_id: str):
     return await agent.get_performance_summary()
 
 
+@router.post("/inject-test-strategy")
+async def inject_test_strategy():
+    """Inject a test strategy directly into the pending queue for flow testing."""
+    from sol.database import get_session
+    from sol.models.agent import Agent
+    from sol.models.strategy import Strategy, StrategyTrade
+    from sol.services.market_data_service import get_market_snapshots
+    from sqlalchemy import select
+
+    async with get_session() as db:
+        result = await db.execute(select(Agent).where(Agent.is_active == True).limit(1))
+        agent = result.scalar_one_or_none()
+        if not agent:
+            raise HTTPException(status_code=404, detail="No active agent found")
+
+        snapshots = await get_market_snapshots()
+        # Pick first liquid stock from watchlist
+        snap = next((s for s in snapshots if s.symbol != "NIFTY 50"), snapshots[0]) if snapshots else None
+        symbol = snap.symbol if snap else "DIXON"
+        price = float(snap.ltp or snap.close or 100) if snap else 15000.0
+
+        sl = round(price * 1.02, 2)   # 2% above for short
+        tp = round(price * 0.94, 2)   # 6% below for short
+        qty = max(1, int(3000 / (sl - price)))  # risk ₹3000
+
+        strategy = Strategy(
+            agent_id=agent.id,
+            agent_name=agent.name,
+            name=f"[TEST] {symbol} Short MIS",
+            description=f"Test strategy for flow validation — {symbol} intraday short",
+            rationale="Injected test strategy — not a real signal",
+            duration_days=1,
+            status="PENDING",
+            is_virtual=True,
+            max_loss_approved=500.0,
+        )
+        db.add(strategy)
+        await db.flush()
+
+        trade = StrategyTrade(
+            strategy_id=strategy.id,
+            agent_id=agent.id,
+            sequence=1,
+            symbol=symbol,
+            exchange="NSE",
+            direction="SELL",
+            order_type="MARKET",
+            product_type="MIS",
+            quantity=qty,
+            entry_price=price,
+            stop_loss=sl,
+            take_profit=tp,
+            rationale="Test trade — flow validation only",
+            status="PENDING",
+        )
+        db.add(trade)
+        await db.flush()
+
+        return {"strategy_id": strategy.id, "symbol": symbol, "quantity": qty, "entry_price": price}
+
+
 @router.post("/trigger-cycle")
 async def trigger_full_cycle():
     """Manually trigger a full analysis cycle (all agents → save strategies → backtest → notify)."""
