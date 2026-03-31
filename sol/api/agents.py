@@ -126,6 +126,7 @@ async def inject_test_strategy():
             duration_days=1,
             status="PENDING",
             is_virtual=True,
+            max_loss_possible=500.0,
             max_loss_approved=500.0,
         )
         db.add(strategy)
