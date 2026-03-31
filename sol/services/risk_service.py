@@ -58,7 +58,7 @@ class RiskService:
             open_positions = result2.scalars().all()
             unrealized = sum(p.unrealized_pnl for p in open_positions)
 
-            return float(realized + unrealized)
+            return float(realized or 0) + unrealized
 
     async def _get_open_position_count(self) -> int:
         from sol.database import get_session

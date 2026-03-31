@@ -67,8 +67,8 @@ class RiskEngine:
         # 5. Compute risk amount
         # For F&O options/futures, quantity = number of lots.
         # Risk and notional must be scaled by lot_size so the limits mean the same thing.
-        entry = proposal.entry_price
-        sl = proposal.stop_loss
+        entry = float(proposal.entry_price) if proposal.entry_price is not None else None
+        sl = float(proposal.stop_loss) if proposal.stop_loss is not None else None
         qty = proposal.quantity
 
         # Resolve lot size: 1 for equity, actual lot size for F&O

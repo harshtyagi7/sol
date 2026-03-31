@@ -41,4 +41,4 @@ class Position(Base, TimestampMixin):
         if self.current_price is None:
             return 0.0
         multiplier = 1 if self.direction == "BUY" else -1
-        return multiplier * (self.current_price - self.avg_price) * self.quantity
+        return float(multiplier * (float(self.current_price) - float(self.avg_price)) * self.quantity)
