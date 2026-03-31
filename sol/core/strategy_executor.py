@@ -178,7 +178,7 @@ class StrategyExecutor:
             })
 
         except Exception as e:
-            logger.error(f"Trade execution failed for {trade.symbol} in strategy {strategy_id}: {e}")
+            logger.error(f"Trade execution failed for {trade.symbol} in strategy {strategy_id}: {e}", exc_info=True)
             async with get_session() as db:
                 t_result = await db.execute(select(StrategyTrade).where(StrategyTrade.id == trade_id))
                 t = t_result.scalar_one_or_none()
