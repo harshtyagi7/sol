@@ -2,6 +2,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { useState, useEffect } from 'react'
 import { riskApi } from '../api/client'
 import { Save, AlertTriangle } from 'lucide-react'
+import DeviceManager from './DeviceManager'
 
 function RupeeInput({
   label,
@@ -175,6 +176,8 @@ export default function RiskConfig() {
           {saved ? 'Saved!' : 'Save'}
         </button>
       </div>
+
+      <DeviceManager />
     </div>
   )
 }

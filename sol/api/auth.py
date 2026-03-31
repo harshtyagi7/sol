@@ -5,9 +5,37 @@ from datetime import datetime, timedelta
 import pytz
 from fastapi import APIRouter, HTTPException
 from fastapi.responses import RedirectResponse
+from pydantic import BaseModel
 
 router = APIRouter(prefix="/api/auth", tags=["auth"])
 IST = pytz.timezone("Asia/Kolkata")
+
+MAX_FAILED_ATTEMPTS = 2
+
+
+# ── Pydantic schemas ──────────────────────────────────────────────────────────
+
+class PinSet(BaseModel):
+    pin: str  # 4–8 digits
+
+class PinVerify(BaseModel):
+    device_id: str
+    pin: str
+    label: str = "Unknown Device"
+
+class DeviceAction(BaseModel):
+    device_id: str
+
+
+# ── Helpers ───────────────────────────────────────────────────────────────────
+
+def _hash_pin(pin: str) -> str:
+    import hashlib
+    return hashlib.sha256(pin.encode()).hexdigest()
+
+
+def _check_pin(pin: str, pin_hash: str) -> bool:
+    return _hash_pin(pin) == pin_hash
 
 
 async def verify_session():
@@ -144,3 +172,169 @@ async def auth_status():
         "user_name": session.user_name,
         "expires_at": session.token_expiry.isoformat() if session.token_expiry else None,
     }
+
+
+# ── PIN management ────────────────────────────────────────────────────────────
+
+@router.get("/pin/status")
+async def pin_status():
+    """Returns whether a PIN has been set."""
+    from sol.database import get_session
+    from sol.models.device_auth import AppPin
+    from sqlalchemy import select
+
+    async with get_session() as db:
+        result = await db.execute(select(AppPin).limit(1))
+        pin = result.scalar_one_or_none()
+    return {"pin_set": pin is not None}
+
+
+@router.post("/pin/set")
+async def set_pin(body: PinSet):
+    """Set or change the app PIN. Calling device is auto-approved."""
+    if not body.pin.isdigit() or not (4 <= len(body.pin) <= 8):
+        raise HTTPException(status_code=400, detail="PIN must be 4–8 digits")
+
+    from sol.database import get_session
+    from sol.models.device_auth import AppPin
+    from sqlalchemy import select
+
+    async with get_session() as db:
+        result = await db.execute(select(AppPin).limit(1))
+        existing = result.scalar_one_or_none()
+        if existing:
+            existing.pin_hash = _hash_pin(body.pin)
+        else:
+            db.add(AppPin(pin_hash=_hash_pin(body.pin)))
+
+    return {"success": True}
+
+
+@router.post("/device/verify")
+async def verify_device_pin(body: PinVerify):
+    """Verify PIN for a device. Blocks after MAX_FAILED_ATTEMPTS wrong attempts."""
+    from sol.database import get_session
+    from sol.models.device_auth import AppPin, DeviceAuth
+    from sqlalchemy import select
+
+    async with get_session() as db:
+        # Check PIN is set
+        pin_result = await db.execute(select(AppPin).limit(1))
+        app_pin = pin_result.scalar_one_or_none()
+        if not app_pin:
+            raise HTTPException(status_code=400, detail="No PIN configured")
+
+        # Get or create device record
+        dev_result = await db.execute(select(DeviceAuth).where(DeviceAuth.device_id == body.device_id))
+        device = dev_result.scalar_one_or_none()
+
+        if device is None:
+            device = DeviceAuth(device_id=body.device_id, label=body.label, status="pending", failed_attempts=0)
+            db.add(device)
+            await db.flush()
+
+        if device.status == "blocked":
+            raise HTTPException(status_code=403, detail="Device blocked. Contact the account owner to unblock.")
+
+        device.last_seen = datetime.now(IST)
+        device.label = body.label
+
+        if _check_pin(body.pin, app_pin.pin_hash):
+            device.status = "approved"
+            device.failed_attempts = 0
+            return {"approved": True}
+        else:
+            device.failed_attempts += 1
+            if device.failed_attempts >= MAX_FAILED_ATTEMPTS:
+                device.status = "blocked"
+                raise HTTPException(status_code=403, detail="Too many wrong attempts. Device blocked.")
+            remaining = MAX_FAILED_ATTEMPTS - device.failed_attempts
+            raise HTTPException(status_code=401, detail=f"Wrong PIN. {remaining} attempt(s) remaining.")
+
+
+@router.get("/device/status")
+async def device_status(device_id: str):
+    """Check the approval status of a device."""
+    from sol.database import get_session
+    from sol.models.device_auth import AppPin, DeviceAuth
+    from sqlalchemy import select
+
+    async with get_session() as db:
+        pin_result = await db.execute(select(AppPin).limit(1))
+        app_pin = pin_result.scalar_one_or_none()
+        if not app_pin:
+            # No PIN set — all devices pass
+            return {"status": "approved", "pin_required": False}
+
+        dev_result = await db.execute(select(DeviceAuth).where(DeviceAuth.device_id == device_id))
+        device = dev_result.scalar_one_or_none()
+
+        if device is None:
+            return {"status": "pending", "pin_required": True}
+
+        if device.status == "approved":
+            # Refresh last_seen
+            device.last_seen = datetime.now(IST)
+
+        return {"status": device.status, "pin_required": True}
+
+
+# ── Device management (owner only) ───────────────────────────────────────────
+
+@router.get("/devices")
+async def list_devices():
+    """List all known devices."""
+    from sol.database import get_session
+    from sol.models.device_auth import DeviceAuth
+    from sqlalchemy import select
+
+    async with get_session() as db:
+        result = await db.execute(select(DeviceAuth).order_by(DeviceAuth.created_at.desc()))
+        devices = result.scalars().all()
+
+    return [
+        {
+            "device_id": d.device_id,
+            "label": d.label,
+            "status": d.status,
+            "failed_attempts": d.failed_attempts,
+            "last_seen": d.last_seen.isoformat() if d.last_seen else None,
+            "created_at": d.created_at.isoformat(),
+        }
+        for d in devices
+    ]
+
+
+@router.post("/devices/{device_id}/unblock")
+async def unblock_device(device_id: str):
+    """Unblock a blocked device."""
+    from sol.database import get_session
+    from sol.models.device_auth import DeviceAuth
+    from sqlalchemy import select
+
+    async with get_session() as db:
+        result = await db.execute(select(DeviceAuth).where(DeviceAuth.device_id == device_id))
+        device = result.scalar_one_or_none()
+        if not device:
+            raise HTTPException(status_code=404, detail="Device not found")
+        device.status = "approved"
+        device.failed_attempts = 0
+
+    return {"success": True}
+
+
+@router.delete("/devices/{device_id}")
+async def remove_device(device_id: str):
+    """Remove a device (forces re-verification on next visit)."""
+    from sol.database import get_session
+    from sol.models.device_auth import DeviceAuth
+    from sqlalchemy import select
+
+    async with get_session() as db:
+        result = await db.execute(select(DeviceAuth).where(DeviceAuth.device_id == device_id))
+        device = result.scalar_one_or_none()
+        if not device:
+            raise HTTPException(status_code=404, detail="Device not found")
+        await db.delete(device)
+
+    return {"success": True}

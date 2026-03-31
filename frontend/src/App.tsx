@@ -8,7 +8,25 @@ import AgentComparison from './components/AgentComparison'
 import ChatInterface from './components/ChatInterface'
 import RiskConfig from './components/RiskConfig'
 import TradeBook from './components/TradeBook'
+import PinScreen from './components/PinScreen'
 import { LayoutDashboard, Bot, TrendingUp, MessageSquare, Shield, BookOpen, Wifi, WifiOff, LogIn, Loader2, ChevronDown } from 'lucide-react'
+import axios from 'axios'
+
+function getOrCreateDeviceId(): string {
+  let id = localStorage.getItem('sol_device_id')
+  if (!id) {
+    id = crypto.randomUUID()
+    localStorage.setItem('sol_device_id', id)
+  }
+  return id
+}
+
+function getDeviceLabel(): string {
+  const ua = navigator.userAgent
+  const browser = ua.includes('Chrome') ? 'Chrome' : ua.includes('Firefox') ? 'Firefox' : ua.includes('Safari') ? 'Safari' : 'Browser'
+  const os = ua.includes('Mac') ? 'Mac' : ua.includes('Windows') ? 'Windows' : ua.includes('Linux') ? 'Linux' : ua.includes('Android') ? 'Android' : ua.includes('iPhone') ? 'iPhone' : 'Device'
+  return `${browser} on ${os}`
+}
 
 type Tab = 'dashboard' | 'strategies' | 'agents' | 'chat' | 'risk' | 'trades'
 
@@ -65,11 +83,22 @@ export default function App() {
   const [activeTab, setActiveTab] = useState<Tab>('dashboard')
   const [notifications, setNotifications] = useState<string[]>([])
   const queryClient = useQueryClient()
+  const deviceId = getOrCreateDeviceId()
+  const deviceLabel = getDeviceLabel()
+  const [deviceApproved, setDeviceApproved] = useState(false)
 
   const { data: authData, isLoading: authLoading } = useQuery({
     queryKey: ['auth-status'],
     queryFn: () => authApi.getStatus().then(r => r.data),
     refetchInterval: 60_000,
+  })
+
+  // Check device PIN status once kite auth passes
+  const { data: deviceStatus, isLoading: deviceLoading } = useQuery({
+    queryKey: ['device-status', deviceId],
+    queryFn: () => axios.get(`/api/auth/device/status?device_id=${deviceId}`).then(r => r.data),
+    enabled: authData?.authenticated === true,
+    staleTime: 60_000,
   })
 
   const { data: dashboardData } = useQuery({
@@ -135,6 +164,29 @@ export default function App() {
   // Show login screen if not authenticated
   if (!authData?.authenticated) {
     return <LoginScreen />
+  }
+
+  // Show PIN gate if device not yet approved
+  if (deviceLoading) {
+    return (
+      <div className="min-h-screen bg-sol-dark flex items-center justify-center">
+        <Loader2 size={32} className="text-sol-accent animate-spin" />
+      </div>
+    )
+  }
+
+  const needsPin = deviceStatus?.pin_required && deviceStatus?.status !== 'approved' && !deviceApproved
+  const isBlocked = deviceStatus?.status === 'blocked'
+
+  if (needsPin || isBlocked) {
+    return (
+      <PinScreen
+        deviceId={deviceId}
+        deviceLabel={deviceLabel}
+        blocked={isBlocked}
+        onApproved={() => setDeviceApproved(true)}
+      />
+    )
   }
 
   const mode = modeData?.mode || dashboardData?.mode || 'PAPER'
