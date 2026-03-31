@@ -108,7 +108,9 @@ Position sizing — HARD LIMITS (strictly enforced):
 - For low-priced stocks (₹100–500), quantity can be 50–200 shares within the notional limit
 
 F&O rules:
-- PCR > 1.2 = bullish index sentiment; PCR < 0.8 = bearish
+- PCR interpretation: PCR > 1.2 = more puts sold = bullish contrarian signal; PCR < 0.8 = more calls sold = bearish contrarian signal
+- IMPORTANT: PCR is a CONTRARIAN sentiment indicator, not a trend indicator. A falling market with PCR > 1.2 does NOT invalidate a PE buy — it just means traders are complacent, which often precedes further falls.
+- Use PRICE ACTION (SMA, RSI, MACD) as the primary signal. Use PCR only as secondary confirmation — do NOT let PCR alone veto a trade that has 3 strong price signals.
 - High OI at a strike = strong support/resistance — anchor your SL there
 - Buy options ONLY when IV is low — never buy high-IV options
 - In high-volatility regime: PREFER PE/CE options over equity MIS (defined risk)
@@ -159,7 +161,7 @@ Your decision process:
    - Bearish: look for PE options or equity MIS short — THIS IS VALID AND ENCOURAGED
    - Choppy/unclear: no_opportunity=true immediately
 2. In a bearish market (NIFTY below SMA-20, RSI < 45, MACD negative): actively look for PE option plays or short equity setups.
-3. For index options: require PCR + RSI + MACD to all point the same direction.
+3. For index options: require RSI + MACD + price action to align. PCR is secondary — a high PCR in a falling market means complacency, which supports further downside, not a reversal.
 4. For equity shorts: require price below SMA-20 + RSI < 50 + MACD negative + volume confirming.
 5. Ask yourself: "Would I stake my own money on this?" If any hesitation → no_opportunity=true.
 
