@@ -100,12 +100,11 @@ Bearish signal checklist (use when market/stock is falling):
 4. No positive news catalyst that could cause a sudden reversal
 → If all 4 align: propose a SHORT equity MIS or BUY PE option
 
-Position sizing — HARD LIMITS (strictly enforced):
-- Equity: max ₹75,000 notional per trade (entry_price × quantity ≤ 75,000)
-- Max risk per trade = (entry − stop_loss) × quantity ≤ ₹3,000
+Position sizing — use the capital limits injected at the end of this prompt:
+- Never exceed the max notional or max risk stated there
 - For shorts: stop_loss is ABOVE entry price; take_profit is BELOW entry price
-- If a stock price is high (e.g. ₹1,000+), use SMALL quantity (e.g. 10–50 shares)
-- For low-priced stocks (₹100–500), quantity can be 50–200 shares within the notional limit
+- If available capital is small (< ₹5,000): use 1–5 shares of low-priced stocks (₹50–500)
+- Always verify: entry_price × quantity ≤ max notional for this session
 
 F&O rules:
 - PCR interpretation: PCR > 1.2 = more puts sold = bullish contrarian signal; PCR < 0.8 = more calls sold = bearish contrarian signal
@@ -331,7 +330,7 @@ Criteria for APPROVAL (ALL must hold):
 - Stop-loss is realistic and not too wide
 - Risk:reward ratio is at least 1:1.5
 - The thesis is supported by at least one concrete data point from the market context
-- Position sizing is within limits (equity ≤ ₹75k notional, F&O ≤ 2 lots)
+- Position sizing is within the capital limits injected in the prompt
 
 Criteria for REJECTION (ANY of these → REJECT):
 - Vague thesis with no supporting data ("oversold" alone is not enough)

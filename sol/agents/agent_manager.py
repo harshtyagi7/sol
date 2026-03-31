@@ -14,7 +14,7 @@ from sol.schemas.trade import TradeProposalCreate
 logger = logging.getLogger(__name__)
 
 
-def build_agent(agent_record) -> Optional[BaseAgent]:
+def build_agent(agent_record, available_capital: float = 1_000_000.0) -> Optional[BaseAgent]:
     """Instantiate an agent from its DB record.
 
     Each provider gets a distinct default strategy prompt (different trading persona)
@@ -37,12 +37,23 @@ def build_agent(agent_record) -> Optional[BaseAgent]:
             "google":    GEMINI_STRATEGY_PROMPT,
         }.get(provider, DEFAULT_STRATEGY_PROMPT)
 
-    # Inject confidence threshold from config_json (default 92%)
+    # Inject confidence threshold and capital context from config_json
     config = agent_record.config_json or {}
     min_confidence = int(config.get("min_confidence", 92))
+
+    max_notional = round(available_capital * 0.90)  # 90% of available capital
+    max_risk = round(available_capital * 0.20)       # 20% max risk per trade
+
     custom_prompt = (
         (custom_prompt or "").rstrip()
-        + f"\n\nConfidence threshold: Only call propose_strategy if your conviction is "
+        + f"\n\nAvailable capital: ₹{available_capital:,.0f}"
+        f"\nPosition sizing for THIS session:"
+        f"\n- Max notional per trade: ₹{max_notional:,.0f} (90% of capital)"
+        f"\n- Max risk per trade: ₹{max_risk:,.0f} (20% of capital)"
+        f"\n- Choose quantity so that (entry_price × quantity) ≤ ₹{max_notional:,.0f}"
+        f"\n- For cheap stocks (₹100–500): use 1–5 shares to stay within limits"
+        f"\n- IMPORTANT: propose trades sized for ₹{available_capital:,.0f} capital, NOT for large accounts"
+        f"\n\nConfidence threshold: Only call propose_strategy if your conviction is "
         f"≥{min_confidence}%. If you are less than {min_confidence}% confident — for any reason "
         f"— set no_opportunity=true. When uncertain, always choose no_opportunity=true.\n"
     )
@@ -80,10 +91,18 @@ class AgentManager:
     async def reload_agents(self, db_session):
         """Reload active agents from DB. Called at startup and on config change."""
         from sol.models.agent import Agent
+        from sol.broker.order_manager import get_order_manager
         from sqlalchemy import select
 
         result = await db_session.execute(select(Agent).where(Agent.is_active == True))
         agent_records = result.scalars().all()
+
+        # Fetch available capital once — used to size prompts for all agents
+        try:
+            om = get_order_manager()
+            available_capital = await om.get_available_capital()
+        except Exception:
+            available_capital = 1_000_000.0
 
         new_agents = {}
         for record in agent_records:
@@ -91,7 +110,7 @@ class AgentManager:
                 # Keep existing instance (preserves virtual portfolio state)
                 new_agents[record.id] = self._agents[record.id]
             else:
-                agent = build_agent(record)
+                agent = build_agent(record, available_capital)
                 if agent:
                     new_agents[record.id] = agent
                     logger.info(f"Loaded agent: {record.name} ({record.model_id})")

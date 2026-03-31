@@ -101,10 +101,18 @@ class RiskEngine:
                     max_risk_amount = self.capital * self.cfg.max_capital_pct / 100
                     allowed_lots = int(max_risk_amount / per_lot_risk)
                     if allowed_lots < 1:
-                        violations.append(
-                            f"Risk per trade exceeds limit ({risk_pct:.1f}% > {self.cfg.max_capital_pct}%) "
-                            f"and cannot be reduced to acceptable quantity."
-                        )
+                        # For very small accounts: allow qty=1 if total risk ≤ full capital
+                        # (better to trade 1 share than block entirely)
+                        if per_lot_risk <= self.capital:
+                            modified_quantity = 1
+                            risk_amount = per_lot_risk
+                            risk_pct = risk_amount / self.capital * 100
+                            logger.info(f"Small capital: allowing qty=1, risk ₹{risk_amount:.0f}")
+                        else:
+                            violations.append(
+                                f"Risk per trade exceeds limit ({risk_pct:.1f}% > {self.cfg.max_capital_pct}%) "
+                                f"and cannot be reduced to acceptable quantity."
+                            )
                     else:
                         modified_quantity = allowed_lots
                         risk_amount = per_lot_risk * allowed_lots
@@ -121,9 +129,15 @@ class RiskEngine:
             if position_pct > self.cfg.max_position_size_pct:
                 max_lots = int(self.capital * self.cfg.max_position_size_pct / 100 / (entry * lot_size))
                 if max_lots < 1:
-                    violations.append(
-                        f"Position size too large: {position_pct:.1f}% > {self.cfg.max_position_size_pct}%"
-                    )
+                    # For small accounts: allow qty=1 if notional ≤ full capital
+                    if entry * lot_size <= self.capital:
+                        if modified_quantity is None or 1 < modified_quantity:
+                            modified_quantity = 1
+                            logger.info(f"Small capital: allowing qty=1, notional ₹{entry * lot_size:.0f}")
+                    else:
+                        violations.append(
+                            f"Position size too large: {position_pct:.1f}% > {self.cfg.max_position_size_pct}%"
+                        )
                 else:
                     if modified_quantity is None or max_lots < modified_quantity:
                         modified_quantity = max_lots
