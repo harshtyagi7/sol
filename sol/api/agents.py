@@ -117,6 +117,10 @@ async def inject_test_strategy():
         tp = round(price * 0.94, 2)   # 6% below for short
         qty = max(1, int(3000 / (sl - price)))  # risk ₹3000
 
+        from datetime import datetime
+        import pytz
+        now = datetime.now(pytz.timezone("Asia/Kolkata"))
+
         strategy = Strategy(
             agent_id=agent.id,
             agent_name=agent.name,
@@ -128,6 +132,7 @@ async def inject_test_strategy():
             is_virtual=True,
             max_loss_possible=500.0,
             max_loss_approved=500.0,
+            proposed_at=now,
         )
         db.add(strategy)
         await db.flush()
