@@ -154,9 +154,9 @@ class StrategyExecutor:
                     direction=trade.direction,
                     product_type=trade.product_type,
                     quantity=actual_qty,
-                    avg_price=trade.entry_price or 0.0,
-                    stop_loss=trade.stop_loss,
-                    take_profit=trade.take_profit,
+                    avg_price=float(trade.entry_price or 0),
+                    stop_loss=float(trade.stop_loss) if trade.stop_loss else None,
+                    take_profit=float(trade.take_profit) if trade.take_profit else None,
                     opened_at=datetime.now(IST),
                     status="OPEN",
                 )
