@@ -176,6 +176,23 @@ async def auth_status():
 
 # ── PIN management ────────────────────────────────────────────────────────────
 
+@router.get("/logout")
+async def logout():
+    """Invalidate the current Kite session."""
+    from sol.database import get_session
+    from sol.models.session import KiteSession
+    from sol.broker.kite_client import get_kite_client
+    from sqlalchemy import update
+
+    async with get_session() as db:
+        await db.execute(update(KiteSession).values(is_valid=False))
+
+    client = get_kite_client()
+    client.set_access_token("")
+
+    return RedirectResponse(url="/")
+
+
 @router.get("/pin/status")
 async def pin_status():
     """Returns whether a PIN has been set."""

@@ -9,7 +9,7 @@ import ChatInterface from './components/ChatInterface'
 import RiskConfig from './components/RiskConfig'
 import TradeBook from './components/TradeBook'
 import PinScreen from './components/PinScreen'
-import { LayoutDashboard, Bot, TrendingUp, MessageSquare, Shield, BookOpen, Wifi, WifiOff, LogIn, Loader2, ChevronDown } from 'lucide-react'
+import { LayoutDashboard, Bot, TrendingUp, MessageSquare, Shield, BookOpen, Wifi, WifiOff, LogIn, LogOut, Loader2, ChevronDown } from 'lucide-react'
 import axios from 'axios'
 
 function getOrCreateDeviceId(): string {
@@ -199,7 +199,7 @@ export default function App() {
     { id: 'trades', label: 'Trades', icon: <BookOpen size={18} /> },
     { id: 'agents', label: 'Agents', icon: <Bot size={18} /> },
     { id: 'chat', label: 'Chat Sol', icon: <MessageSquare size={18} /> },
-    { id: 'risk', label: 'Risk', icon: <Shield size={18} /> },
+    { id: 'risk', label: 'Settings', icon: <Shield size={18} /> },
   ]
 
   return (
@@ -266,6 +266,13 @@ export default function App() {
           <span className="hidden md:inline text-gray-500 font-mono text-xs">{market.time_ist}</span>
           <span className="hidden sm:inline text-gray-500 text-xs truncate max-w-[100px]">{authData.user_name}</span>
           {connected ? <Wifi size={14} className="text-sol-green flex-shrink-0" /> : <WifiOff size={14} className="text-sol-red flex-shrink-0" />}
+          <button
+            onClick={() => { if (confirm('Log out?')) window.location.href = '/api/auth/logout' }}
+            className="p-1.5 rounded-lg text-gray-500 hover:text-white hover:bg-white/10 transition-colors"
+            title="Logout"
+          >
+            <LogOut size={14} />
+          </button>
         </div>
       </header>
 
