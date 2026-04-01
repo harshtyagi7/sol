@@ -53,30 +53,28 @@ SYMBOL_ALIASES: dict[str, str] = {
 }
 
 # --- Instrument token cache ---
-# Maps "EXCHANGE:SYMBOL" → instrument_token (int)
-# Refreshed once per day; a cold miss triggers a full load.
-_token_cache: dict[str, int] = {}
-_token_cache_loaded_at: Optional[datetime] = None
+# Separate cache per exchange so NFO loads don't evict NSE tokens.
+# Maps exchange → {"EXCHANGE:SYMBOL" → instrument_token}
+_token_cache: dict[str, dict[str, int]] = {}
+_token_cache_loaded_at: dict[str, Optional[datetime]] = {}
 _CACHE_TTL_SECONDS = 86_400  # 24 hours
 
 
 def _ensure_token_cache(client, exchange: str = "NSE") -> None:
     """Load (or refresh) the instrument token cache for *exchange*."""
-    global _token_cache, _token_cache_loaded_at
-
     now = datetime.now(IST)
-    if (
-        _token_cache_loaded_at is not None
-        and (now - _token_cache_loaded_at).total_seconds() < _CACHE_TTL_SECONDS
-    ):
+    loaded_at = _token_cache_loaded_at.get(exchange)
+    if loaded_at is not None and (now - loaded_at).total_seconds() < _CACHE_TTL_SECONDS:
         return  # still fresh
 
     try:
         instruments = client.get_instruments(exchange)
+        cache = {}
         for inst in instruments:
             key = f"{exchange}:{inst['tradingsymbol']}"
-            _token_cache[key] = inst["instrument_token"]
-        _token_cache_loaded_at = now
+            cache[key] = inst["instrument_token"]
+        _token_cache[exchange] = cache
+        _token_cache_loaded_at[exchange] = now
         logger.info(f"Instrument token cache loaded ({len(instruments)} symbols, exchange={exchange})")
     except Exception as e:
         logger.error(f"Failed to load instruments for {exchange}: {e}")
@@ -86,9 +84,11 @@ def _get_token(client, symbol: str, exchange: str) -> Optional[int]:
     """Return the instrument token for a given symbol, loading cache if needed."""
     canonical = SYMBOL_ALIASES.get(symbol, symbol)
     key = f"{exchange}:{canonical}"
-    if key not in _token_cache:
+    exchange_cache = _token_cache.get(exchange, {})
+    if key not in exchange_cache:
         _ensure_token_cache(client, exchange)
-    return _token_cache.get(key)
+        exchange_cache = _token_cache.get(exchange, {})
+    return exchange_cache.get(key)
 
 
 # --- Indicator computation ---
