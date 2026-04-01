@@ -149,9 +149,9 @@ REGIME_GUIDANCE: dict[str, str] = {
     ),
     "VOLATILE": (
         "MARKET REGIME: HIGH VOLATILITY ⚠️\n"
-        "ATR is elevated — stop-losses are getting hit randomly, risk is hard to size accurately.\n"
-        "ONLY defined-risk option buys are acceptable (CE or PE with capped premium at risk).\n"
-        "No equity MIS trades. No futures. Strong preference for no_opportunity=true."
+        "ATR is elevated — use tighter stops than usual.\n"
+        "PREFER defined-risk option buys (CE or PE). Equity MIS trades are ALLOWED but use stops of 1–1.5% max.\n"
+        "Do NOT default to no_opportunity just because of volatility — look for equity setups with clear signals."
     ),
     "UNKNOWN": (
         "MARKET REGIME: UNKNOWN (insufficient data)\n"
