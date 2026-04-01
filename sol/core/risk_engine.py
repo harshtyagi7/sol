@@ -73,16 +73,20 @@ class RiskEngine:
 
         # Resolve lot size: 1 for equity, actual lot size for F&O
         lot_size = 1
-        if getattr(proposal, "option_type", None) in ("CE", "PE", "FUT"):
-            from sol.services.option_chain_service import DEFAULT_LOT_SIZES, UNDERLYING_MAP
-            # Derive underlying from symbol (e.g. NIFTY25APR24500CE → NIFTY)
+        is_fno = (
+            getattr(proposal, "exchange", None) == "NFO"
+            or getattr(proposal, "option_type", None) in ("CE", "PE", "FUT")
+            or getattr(proposal, "product_type", None) == "NRML"
+        )
+        if is_fno:
+            from sol.services.option_chain_service import DEFAULT_LOT_SIZES
             sym = proposal.symbol.upper()
             for nfo_name, lot in DEFAULT_LOT_SIZES.items():
                 if sym.startswith(nfo_name):
                     lot_size = lot
                     break
             if lot_size == 1:
-                lot_size = 50  # safe fallback for unknown NFO symbols
+                lot_size = 75  # safe fallback — NIFTY default
 
         effective_qty = qty * lot_size  # actual units for risk calculation
 

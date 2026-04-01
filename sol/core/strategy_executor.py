@@ -90,6 +90,7 @@ class StrategyExecutor:
                 direction=trade.direction,
                 order_type=trade.order_type,
                 product_type=trade.product_type,
+                option_type=trade.option_type,
                 quantity=trade.quantity,
                 entry_price=trade.entry_price,
                 stop_loss=trade.stop_loss,

@@ -114,14 +114,11 @@ class AgentManager:
 
         new_agents = {}
         for record in agent_records:
-            if record.id in self._agents:
-                # Keep existing instance (preserves virtual portfolio state)
-                new_agents[record.id] = self._agents[record.id]
-            else:
-                agent = build_agent(record, available_capital)
-                if agent:
-                    new_agents[record.id] = agent
-                    logger.info(f"Loaded agent: {record.name} ({record.model_id})")
+            # Always rebuild — prompt contains capital context that changes each cycle
+            agent = build_agent(record, available_capital)
+            if agent:
+                new_agents[record.id] = agent
+                logger.info(f"Loaded agent: {record.name} ({record.model_id})")
 
         self._agents = new_agents
         logger.info(f"Agent manager: {len(self._agents)} active agents")
