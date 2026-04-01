@@ -54,10 +54,11 @@ class OrderManager:
         if order_type == "MARKET" and proposal.exchange in ("NSE", "BSE") and price > 0:
             order_type = "LIMIT"
             # Aggressive limit: 0.5% above for buys, 0.5% below for sells to ensure fill
+            tick = 0.05
             if proposal.direction == "BUY":
-                price = round(price * 1.005, 2)
+                price = round(round(price * 1.005 / tick) * tick, 2)
             else:
-                price = round(price * 0.995, 2)
+                price = round(round(price * 0.995 / tick) * tick, 2)
             logger.info(f"Converted MARKET to LIMIT @ ₹{price} for {proposal.symbol} (Zerodha API requirement)")
 
         order_id = broker.place_order(
