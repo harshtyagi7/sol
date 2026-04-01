@@ -106,7 +106,7 @@ async def run_analysis_cycle():
             continue
 
         from sol.core.trading_mode import get_paper_mode
-        is_virtual = get_paper_mode() or agent_record.is_virtual
+        is_virtual = get_paper_mode() or agent_record.paper_only
         reviewer = reviewer_map.get(agent_id)
 
         for proposal in strategy_proposals:
