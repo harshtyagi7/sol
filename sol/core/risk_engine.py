@@ -21,9 +21,14 @@ class RiskEngine:
 
     def __init__(self, risk_config, capital: float, daily_pnl: float, open_position_count: int):
         self.cfg = risk_config  # RiskConfig ORM model
-        self.capital = capital
-        self.daily_pnl = daily_pnl
-        self.open_position_count = open_position_count
+        self.capital = float(capital)
+        self.daily_pnl = float(daily_pnl)
+        self.open_position_count = int(open_position_count)
+        # Cast DB Decimal fields to float/int so arithmetic never raises TypeError
+        self.cfg.daily_loss_limit_pct = float(risk_config.daily_loss_limit_pct)
+        self.cfg.max_capital_pct = float(risk_config.max_capital_pct)
+        self.cfg.max_position_size_pct = float(risk_config.max_position_size_pct)
+        self.cfg.max_open_positions = int(risk_config.max_open_positions)
 
     def validate(self, proposal: "TradeProposalCreate") -> RiskReport:
         violations: list[str] = []
