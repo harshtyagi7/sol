@@ -108,18 +108,22 @@ async def inject_test_strategy():
             raise HTTPException(status_code=404, detail="No active agent found")
 
         snapshots = await get_market_snapshots()
-        # Pick first liquid stock from watchlist
-        snap = next((s for s in snapshots if s.symbol != "NIFTY 50"), snapshots[0]) if snapshots else None
-        symbol = snap.symbol if snap else "DIXON"
-        price = float(snap.current_price or 100) if snap else 15000.0
+        # Pick cheapest affordable stock for small-capital live test
+        affordable = [s for s in snapshots if s.symbol != "NIFTY 50" and s.current_price and float(s.current_price) < 500]
+        snap = affordable[0] if affordable else next((s for s in snapshots if s.symbol != "NIFTY 50"), None)
+        symbol = snap.symbol if snap else "SJVN"
+        price = float(snap.current_price or 80) if snap else 80.0
 
-        sl = round(price * 1.02, 2)   # 2% above for short
-        tp = round(price * 0.94, 2)   # 6% below for short
-        qty = max(1, int(3000 / (sl - price)))  # risk ₹3000
+        sl = round(price * 1.015, 2)  # 1.5% above for short
+        tp = round(price * 0.955, 2)  # 4.5% below for short
+        qty = 1
 
         from datetime import datetime
         import pytz
         now = datetime.now(pytz.timezone("Asia/Kolkata"))
+
+        from sol.core.trading_mode import get_paper_mode
+        is_virtual = get_paper_mode()
 
         strategy = Strategy(
             agent_id=agent.id,
@@ -128,7 +132,7 @@ async def inject_test_strategy():
             description=f"Test strategy for flow validation — {symbol} intraday short",
             rationale="Injected test strategy — not a real signal",
             duration_days=1,
-            is_virtual=True,
+            is_virtual=is_virtual,
             max_loss_possible=500.0,
             max_loss_approved=500.0,
             proposed_at=now,
