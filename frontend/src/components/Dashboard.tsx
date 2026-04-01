@@ -1,7 +1,7 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { useState } from 'react'
 import { portfolioApi, agentsApi } from '../api/client'
-import { TrendingUp, TrendingDown, DollarSign, Activity, AlertTriangle, X, Play, Loader2 } from 'lucide-react'
+import { TrendingUp, TrendingDown, DollarSign, Activity, AlertTriangle, X, Play, Loader2, RefreshCw } from 'lucide-react'
 
 interface Props { data?: any }
 
@@ -90,6 +90,7 @@ function OpenPositions() {
 export default function Dashboard({ data }: Props) {
   const queryClient = useQueryClient()
   const [cycleStatus, setCycleStatus] = useState<string | null>(null)
+  const [syncStatus, setSyncStatus] = useState<string | null>(null)
 
   const portfolio = data?.portfolio || {}
   const risk = data?.risk || {}
@@ -117,11 +118,42 @@ export default function Dashboard({ data }: Props) {
     },
   })
 
+  const syncKite = useMutation({
+    mutationFn: () => portfolioApi.syncFromKite(),
+    onMutate: () => setSyncStatus('syncing'),
+    onSuccess: (res) => {
+      const n = res.data?.synced ?? 0
+      setSyncStatus(n > 0 ? `synced ${n}` : 'up to date')
+      queryClient.invalidateQueries({ queryKey: ['positions'] })
+      queryClient.invalidateQueries({ queryKey: ['dashboard'] })
+      setTimeout(() => setSyncStatus(null), 5000)
+    },
+    onError: () => {
+      setSyncStatus('error')
+      setTimeout(() => setSyncStatus(null), 4000)
+    },
+  })
+
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <h1 className="text-2xl font-bold text-white">Dashboard</h1>
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-2">
+          <button
+            onClick={() => syncKite.mutate()}
+            disabled={syncKite.isPending}
+            className="flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-medium border border-sol-border bg-sol-card text-gray-300 hover:text-white hover:border-gray-500 transition-colors disabled:opacity-50"
+            title="Sync positions from Kite"
+          >
+            {syncKite.isPending
+              ? <><Loader2 size={13} className="animate-spin" /> Syncing…</>
+              : syncStatus && syncStatus !== 'error'
+              ? <><RefreshCw size={13} className="text-green-400" /> {syncStatus}</>
+              : syncStatus === 'error'
+              ? <><RefreshCw size={13} className="text-red-400" /> Error</>
+              : <><RefreshCw size={13} /> Sync Kite</>
+            }
+          </button>
           <button
             onClick={() => runCycle.mutate()}
             disabled={runCycle.isPending}

@@ -30,6 +30,7 @@ export const portfolioApi = {
   getPositions: () => api.get('/portfolio/positions'),
   getTrades: () => api.get('/portfolio/trades'),
   closePosition: (id: string) => api.post(`/portfolio/positions/${id}/close`),
+  syncFromKite: () => api.post('/portfolio/sync-from-kite'),
 }
 
 export const agentsApi = {

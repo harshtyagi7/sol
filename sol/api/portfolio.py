@@ -113,6 +113,128 @@ async def get_trades(limit: int = 100):
         ]
 
 
+@router.post("/sync-from-kite")
+async def sync_positions_from_kite():
+    """
+    Reconcile our DB with Kite's actual position data.
+    For every live OPEN position in DB, check if Kite shows it as closed/squared off.
+    Useful after market close or if the position monitor missed an exit.
+    """
+    from sol.database import get_session
+    from sol.models.position import Position
+    from sol.broker.kite_client import get_kite_client
+    from sqlalchemy import select
+    from datetime import datetime
+    import pytz
+
+    IST = pytz.timezone("Asia/Kolkata")
+
+    client = get_kite_client()
+    if not client.is_authenticated():
+        raise HTTPException(status_code=400, detail="Kite not authenticated")
+
+    # Fetch Kite's current position snapshot
+    try:
+        kite_positions = client.get_positions()
+    except Exception as e:
+        raise HTTPException(status_code=502, detail=f"Kite API error: {e}")
+
+    # Build lookup: symbol -> kite position data (day + net)
+    kite_day: dict = {}
+    kite_net: dict = {}
+    for p in kite_positions.get("day", []):
+        key = p["tradingsymbol"]
+        kite_day[key] = p
+    for p in kite_positions.get("net", []):
+        key = p["tradingsymbol"]
+        kite_net[key] = p
+
+    # Also fetch today's executed trades from Kite for fill prices
+    try:
+        kite_trades = client.get_trades()
+    except Exception:
+        kite_trades = []
+
+    # Build trade lookup: symbol -> list of trades
+    kite_trade_map: dict = {}
+    for t in kite_trades:
+        sym = t.get("tradingsymbol", "")
+        kite_trade_map.setdefault(sym, []).append(t)
+
+    # Fetch our live OPEN positions
+    async with get_session() as db:
+        result = await db.execute(
+            select(Position).where(Position.status == "OPEN", Position.is_virtual == False)
+        )
+        open_positions = result.scalars().all()
+
+    if not open_positions:
+        return {"synced": 0, "message": "No open live positions to sync"}
+
+    synced = []
+    for pos in open_positions:
+        kp_day = kite_day.get(pos.symbol)
+        kp_net = kite_net.get(pos.symbol)
+
+        # A MIS position that's been squared off shows quantity=0 in day positions
+        # A position not found in Kite at all also means it's closed
+        kite_qty = None
+        kite_pnl = None
+        kite_last_price = None
+
+        if kp_day is not None:
+            kite_qty = abs(int(kp_day.get("quantity", 0)))
+            kite_pnl = float(kp_day.get("pnl", 0))
+            kite_last_price = float(kp_day.get("last_price", 0)) or None
+
+        # Determine close price: use last known trade fill price if available
+        close_price = kite_last_price or float(pos.current_price or pos.avg_price)
+        trades_for_sym = kite_trade_map.get(pos.symbol, [])
+        # Find the closing trade (opposite direction to our entry)
+        close_direction = "BUY" if pos.direction == "SELL" else "SELL"
+        closing_trades = [t for t in trades_for_sym if t.get("transaction_type") == close_direction]
+        if closing_trades:
+            # Use the most recent closing trade's average price
+            closing_trades.sort(key=lambda t: t.get("order_timestamp", ""), reverse=True)
+            avg_fill = closing_trades[0].get("average_price")
+            if avg_fill and float(avg_fill) > 0:
+                close_price = float(avg_fill)
+
+        # If Kite shows qty=0 for this symbol, it's been squared off
+        is_squared_off = (kite_qty is not None and kite_qty == 0)
+        # Or if the symbol doesn't appear in day positions at all (e.g. expired/delisted)
+        not_in_kite = (kp_day is None and kp_net is None)
+
+        if is_squared_off or not_in_kite:
+            realized = kite_pnl if kite_pnl is not None else (
+                (close_price - float(pos.avg_price)) * pos.quantity * (1 if pos.direction == "BUY" else -1)
+            )
+
+            async with get_session() as db:
+                result = await db.execute(select(Position).where(Position.id == pos.id))
+                p = result.scalar_one_or_none()
+                if p and p.status == "OPEN":
+                    p.status = "SQUAREDOFF"
+                    p.close_price = close_price
+                    p.realized_pnl = realized
+                    p.closed_at = datetime.now(IST)
+                    p.current_price = close_price
+
+            synced.append({
+                "symbol": pos.symbol,
+                "direction": pos.direction,
+                "close_price": close_price,
+                "realized_pnl": round(realized, 2),
+                "source": "kite_sync",
+            })
+
+    return {
+        "synced": len(synced),
+        "positions": synced,
+        "message": f"Synced {len(synced)} position(s) from Kite" if synced else "All positions already up to date",
+    }
+
+
 @router.get("/summary")
 async def portfolio_summary():
     """Aggregated portfolio summary — real + virtual."""
