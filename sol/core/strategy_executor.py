@@ -14,6 +14,9 @@ import pytz
 logger = logging.getLogger(__name__)
 IST = pytz.timezone("Asia/Kolkata")
 
+# Keep strong references to background tasks so the GC doesn't collect them
+_background_tasks: set = set()
+
 
 class StrategyExecutor:
 
@@ -23,7 +26,9 @@ class StrategyExecutor:
         Stops immediately if the max-loss cap is hit after any trade.
         Runs as a background task — does not block the caller.
         """
-        asyncio.create_task(self._run(strategy_id))
+        task = asyncio.create_task(self._run(strategy_id))
+        _background_tasks.add(task)
+        task.add_done_callback(_background_tasks.discard)
 
     async def _run(self, strategy_id: str):
         from sol.database import get_session
@@ -135,6 +140,21 @@ class StrategyExecutor:
 
             order_id = await om.execute_proposal(fp, risk_report)
 
+            # Capture actual fill price from Kite (MARKET orders fill near-instantly)
+            actual_qty = risk_report.modified_quantity or trade.quantity
+            entry = float(trade.entry_price or 0)
+            fill_price = entry
+            try:
+                from sol.core.trading_mode import get_paper_mode
+                if not get_paper_mode():
+                    await asyncio.sleep(1.0)  # Allow MARKET order to fill
+                    fetched = await om.get_order_fill_price(order_id)
+                    if fetched:
+                        fill_price = fetched
+                        logger.info(f"Captured fill price for {trade.symbol}: ₹{fill_price:.2f} (proposed ₹{entry:.2f})")
+            except Exception as e:
+                logger.warning(f"Could not fetch fill price for {order_id}: {e}")
+
             async with get_session() as db:
                 t_result = await db.execute(select(StrategyTrade).where(StrategyTrade.id == trade_id))
                 trade = t_result.scalar_one()
@@ -143,8 +163,6 @@ class StrategyExecutor:
                 trade.executed_at = datetime.now(IST)
 
                 # Create position record
-                actual_qty = risk_report.modified_quantity or trade.quantity
-                entry = float(trade.entry_price or 0)
                 position = Position(
                     proposal_id=trade_id,
                     agent_id=trade.agent_id,
@@ -155,8 +173,8 @@ class StrategyExecutor:
                     direction=trade.direction,
                     product_type=trade.product_type,
                     quantity=actual_qty,
-                    avg_price=entry,
-                    current_price=entry,  # initialise so P&L shows 0 until first LTP update
+                    avg_price=fill_price,
+                    current_price=fill_price,  # initialise so P&L shows 0 until first LTP update
                     stop_loss=float(trade.stop_loss) if trade.stop_loss else None,
                     take_profit=float(trade.take_profit) if trade.take_profit else None,
                     opened_at=datetime.now(IST),

@@ -9,10 +9,14 @@ router = APIRouter(prefix="/api/portfolio", tags=["portfolio"])
 async def get_positions():
     from sol.database import get_session
     from sol.models.position import Position
+    from sol.core.trading_mode import get_paper_mode
     from sqlalchemy import select
 
+    is_virtual = get_paper_mode()
     async with get_session() as db:
-        result = await db.execute(select(Position).where(Position.status == "OPEN"))
+        result = await db.execute(
+            select(Position).where(Position.status == "OPEN", Position.is_virtual == is_virtual)
+        )
         positions = result.scalars().all()
         return [
             {
@@ -73,12 +77,14 @@ async def get_trades(limit: int = 100):
     """All closed/exited positions — the trade history book."""
     from sol.database import get_session
     from sol.models.position import Position
+    from sol.core.trading_mode import get_paper_mode
     from sqlalchemy import select
 
+    is_virtual = get_paper_mode()
     async with get_session() as db:
         result = await db.execute(
             select(Position)
-            .where(Position.status != "OPEN")
+            .where(Position.status != "OPEN", Position.is_virtual == is_virtual)
             .order_by(Position.closed_at.desc())
             .limit(limit)
         )
@@ -113,26 +119,30 @@ async def portfolio_summary():
     from sol.broker.order_manager import get_order_manager
     from sol.database import get_session
     from sol.models.position import Position
-    from sol.config import get_settings
     from sqlalchemy import select, func
     from datetime import datetime
     import pytz
     IST = pytz.timezone("Asia/Kolkata")
     today = datetime.now(IST).date()
 
-    settings = get_settings()
+    from sol.core.trading_mode import get_paper_mode
+    is_virtual = get_paper_mode()
+
     om = get_order_manager()
     available_capital = om.get_available_capital()
 
     async with get_session() as db:
-        # Open positions
-        result = await db.execute(select(Position).where(Position.status == "OPEN"))
+        # Open positions for current mode only
+        result = await db.execute(
+            select(Position).where(Position.status == "OPEN", Position.is_virtual == is_virtual)
+        )
         open_positions = result.scalars().all()
 
-        # Today's realized P&L
+        # Today's realized P&L for current mode only
         result2 = await db.execute(
             select(func.sum(Position.realized_pnl)).where(
-                func.date(Position.closed_at) == today
+                func.date(Position.closed_at) == today,
+                Position.is_virtual == is_virtual,
             )
         )
         today_realized = float(result2.scalar() or 0)
@@ -141,7 +151,7 @@ async def portfolio_summary():
     total_pnl = today_realized + unrealized
 
     return {
-        "mode": "PAPER" if settings.PAPER_TRADING_MODE else "LIVE",
+        "mode": "PAPER" if is_virtual else "LIVE",
         "available_capital": available_capital,
         "open_positions_count": len(open_positions),
         "unrealized_pnl": round(unrealized, 2),

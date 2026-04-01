@@ -38,6 +38,7 @@ export const agentsApi = {
   update: (id: string, data: object) => api.put(`/agents/${id}`, data),
   deactivate: (id: string) => api.delete(`/agents/${id}`),
   trigger: (id: string) => api.post(`/agents/${id}/trigger`),
+  triggerCycle: () => api.post('/agents/trigger-cycle', null, { timeout: 120_000 }),
 }
 
 export const riskApi = {

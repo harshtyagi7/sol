@@ -5,6 +5,7 @@ Always re-validates risk before execution.
 
 import logging
 from datetime import datetime
+from typing import Optional
 
 import pytz
 
@@ -86,6 +87,23 @@ class OrderManager:
         )
         logger.info(f"Closed position: {close_direction} {quantity} {exchange}:{symbol} -> {order_id}")
         return order_id
+
+    async def get_order_fill_price(self, order_id: str) -> Optional[float]:
+        """Fetch the actual average fill price from Kite for a completed order."""
+        try:
+            from sol.core.trading_mode import get_paper_mode
+            if get_paper_mode():
+                return None
+            broker = self._get_broker()
+            history = broker.get_order_history(order_id)
+            if history:
+                final = history[-1]
+                avg = final.get("average_price")
+                if avg and float(avg) > 0:
+                    return float(avg)
+        except Exception as e:
+            logger.warning(f"Could not fetch fill price for order {order_id}: {e}")
+        return None
 
     def get_available_capital(self) -> float:
         """Returns available cash balance."""

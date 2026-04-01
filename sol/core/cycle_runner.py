@@ -8,7 +8,6 @@ from datetime import datetime
 
 import pytz
 
-from sol.config import get_settings
 
 logger = logging.getLogger(__name__)
 IST = pytz.timezone("Asia/Kolkata")
@@ -29,7 +28,6 @@ async def run_analysis_cycle():
     from sol.services.market_data_service import get_market_snapshots
     from sol.services.strategy_service import get_strategy_service
 
-    settings = get_settings()
     agent_manager = get_agent_manager()
 
     logger.info(f"Analysis cycle starting at {datetime.now(IST).strftime('%H:%M IST')}")
@@ -107,7 +105,8 @@ async def run_analysis_cycle():
         if not agent_record:
             continue
 
-        is_virtual = settings.PAPER_TRADING_MODE or agent_record.is_virtual
+        from sol.core.trading_mode import get_paper_mode
+        is_virtual = get_paper_mode() or agent_record.is_virtual
         reviewer = reviewer_map.get(agent_id)
 
         for proposal in strategy_proposals:

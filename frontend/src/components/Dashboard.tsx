@@ -1,6 +1,7 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { portfolioApi } from '../api/client'
-import { TrendingUp, TrendingDown, DollarSign, Activity, AlertTriangle, X } from 'lucide-react'
+import { useState } from 'react'
+import { portfolioApi, agentsApi, settingsApi } from '../api/client'
+import { TrendingUp, TrendingDown, DollarSign, Activity, AlertTriangle, X, Play, Loader2 } from 'lucide-react'
 
 interface Props { data?: any }
 
@@ -87,6 +88,9 @@ function OpenPositions() {
 }
 
 export default function Dashboard({ data }: Props) {
+  const queryClient = useQueryClient()
+  const [cycleStatus, setCycleStatus] = useState<string | null>(null)
+
   const portfolio = data?.portfolio || {}
   const risk = data?.risk || {}
   const agents = data?.agents || []
@@ -98,9 +102,74 @@ export default function Dashboard({ data }: Props) {
   const riskLimit = risk.daily_loss_limit_pct || 5
   const riskPct = Math.min((riskUsed / riskLimit) * 100, 100)
 
+  const { data: modeData, refetch: refetchMode } = useQuery({
+    queryKey: ['tradingMode'],
+    queryFn: () => settingsApi.getMode().then(r => r.data),
+  })
+  const isPaper = modeData?.paper_trading ?? true
+
+  const toggleMode = useMutation({
+    mutationFn: () => settingsApi.setMode(isPaper ? false : true),
+    onSuccess: () => {
+      refetchMode()
+      queryClient.invalidateQueries({ queryKey: ['portfolio'] })
+    },
+  })
+
+  const runCycle = useMutation({
+    mutationFn: () => agentsApi.triggerCycle(),
+    onMutate: () => setCycleStatus('running'),
+    onSuccess: () => {
+      setCycleStatus('done')
+      queryClient.invalidateQueries({ queryKey: ['strategies'] })
+      queryClient.invalidateQueries({ queryKey: ['dashboard'] })
+      setTimeout(() => setCycleStatus(null), 4000)
+    },
+    onError: () => {
+      setCycleStatus('error')
+      setTimeout(() => setCycleStatus(null), 4000)
+    },
+  })
+
   return (
     <div className="space-y-6">
-      <h1 className="text-2xl font-bold text-white">Dashboard</h1>
+      <div className="flex items-center justify-between">
+        <h1 className="text-2xl font-bold text-white">Dashboard</h1>
+        <div className="flex items-center gap-3">
+          {/* Mode toggle */}
+          <button
+            onClick={() => {
+              if (!isPaper && !confirm('Switch to PAPER mode? Live trading will stop.')) return
+              if (isPaper && !confirm('Switch to LIVE mode? Real orders will be placed!')) return
+              toggleMode.mutate()
+            }}
+            className={`flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-bold border transition-colors ${
+              isPaper
+                ? 'border-blue-700 bg-blue-900/30 text-blue-400 hover:bg-blue-900/50'
+                : 'border-green-700 bg-green-900/30 text-green-400 hover:bg-green-900/50'
+            }`}
+          >
+            <span className={`w-2 h-2 rounded-full ${isPaper ? 'bg-blue-400' : 'bg-green-400 animate-pulse'}`} />
+            {isPaper ? 'PAPER' : 'LIVE'}
+          </button>
+
+          {/* Run cycle */}
+          <button
+            onClick={() => runCycle.mutate()}
+            disabled={runCycle.isPending}
+            className="flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-medium border border-sol-border bg-sol-card text-gray-300 hover:text-white hover:border-gray-500 transition-colors disabled:opacity-50"
+          >
+            {runCycle.isPending
+              ? <><Loader2 size={13} className="animate-spin" /> Running…</>
+              : cycleStatus === 'done'
+              ? <><Play size={13} className="text-green-400" /> Cycle done!</>
+              : cycleStatus === 'error'
+              ? <><Play size={13} className="text-red-400" /> Error</>
+              : <><Play size={13} /> Run Cycle</>
+            }
+          </button>
+        </div>
+      </div>
 
       {/* Stats */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 md:gap-4">
