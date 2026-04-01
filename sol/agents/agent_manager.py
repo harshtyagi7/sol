@@ -50,10 +50,18 @@ def build_agent(agent_record, available_capital: float = 1_000_000.0) -> Optiona
         f"\nPosition sizing for THIS session:"
         f"\n- Max notional per trade: ₹{max_notional:,.0f} (90% of capital)"
         f"\n- Max risk per trade: ₹{max_risk:,.0f} (20% of capital)"
-        f"\n- Choose quantity so that (entry_price × quantity) ≤ ₹{max_notional:,.0f}"
-        f"\n- For cheap stocks (₹100–500): use 1–5 shares to stay within limits"
         f"\n- IMPORTANT: propose trades sized for ₹{available_capital:,.0f} capital, NOT for large accounts"
-        f"\n\nConfidence threshold: Only call propose_strategy if your conviction is "
+        f"\n"
+        f"\nF&O LOT SIZES (CRITICAL — options are traded in lots, not individual units):"
+        f"\n- NIFTY options: 1 lot = 75 shares. True cost = premium × 75"
+        f"\n- BANKNIFTY options: 1 lot = 15 shares. True cost = premium × 15"
+        f"\n- FINNIFTY options: 1 lot = 40 shares. True cost = premium × 40"
+        f"\n- Equity F&O (RELIANCE etc): varies, assume 250 unless known"
+        f"\n- When proposing options: quantity=1 means 1 lot. Verify that (premium × lot_size) ≤ ₹{max_notional:,.0f}"
+        f"\n- Example: NIFTY PE premium ₹100, qty=1 → cost = ₹100 × 75 = ₹7,500. If capital is ₹{available_capital:,.0f}, this {'is' if 7500 <= max_notional else 'is NOT'} affordable."
+        f"\n- If (premium × lot_size) > available capital, set no_opportunity=true for options — do NOT propose an unaffordable options trade."
+        f"\n"
+        f"\nConfidence threshold: Only call propose_strategy if your conviction is "
         f"≥{min_confidence}%. If you are less than {min_confidence}% confident — for any reason "
         f"— set no_opportunity=true. When uncertain, always choose no_opportunity=true.\n"
     )
@@ -100,7 +108,7 @@ class AgentManager:
         # Fetch available capital once — used to size prompts for all agents
         try:
             om = get_order_manager()
-            available_capital = await om.get_available_capital()
+            available_capital = om.get_available_capital()
         except Exception:
             available_capital = 1_000_000.0
 

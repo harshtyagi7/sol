@@ -29,6 +29,21 @@ class StrategyService:
         """Persist a strategy proposal from an agent. Returns strategy id."""
         from sol.database import get_session
         from sol.models.strategy import Strategy, StrategyTrade
+        from sol.broker.order_manager import get_order_manager
+
+        # Cap max_loss_possible at actual available capital
+        try:
+            available_capital = get_order_manager().get_available_capital()
+        except Exception:
+            available_capital = None
+
+        max_loss = proposal.max_loss_possible
+        if max_loss and available_capital and max_loss > available_capital:
+            logger.warning(
+                f"Strategy '{proposal.name}' max_loss_possible ₹{max_loss:.0f} "
+                f"exceeds available capital ₹{available_capital:.0f} — capping"
+            )
+            max_loss = round(available_capital * 0.90)  # cap at 90% of capital
 
         async with get_session() as db:
             strategy = Strategy(
@@ -38,7 +53,7 @@ class StrategyService:
                 description=proposal.description,
                 rationale=proposal.rationale,
                 duration_days=proposal.duration_days,
-                max_loss_possible=proposal.max_loss_possible,
+                max_loss_possible=max_loss,
                 status="PENDING_APPROVAL",
                 proposed_at=datetime.now(IST),
                 is_virtual=is_virtual,
@@ -49,7 +64,17 @@ class StrategyService:
             for trade in sorted(proposal.trades, key=lambda t: t.sequence):
                 risk = 0.0
                 if trade.entry_price and trade.stop_loss:
-                    risk = round(abs(trade.entry_price - trade.stop_loss) * trade.quantity, 2)
+                    # For F&O, risk must be scaled by lot size
+                    lot_size = 1
+                    if trade.exchange == "NFO":
+                        from sol.services.option_chain_service import DEFAULT_LOT_SIZES
+                        for name, ls in DEFAULT_LOT_SIZES.items():
+                            if trade.symbol.startswith(name):
+                                lot_size = ls
+                                break
+                        if lot_size == 1:
+                            lot_size = 75  # safe fallback (NIFTY)
+                    risk = round(abs(trade.entry_price - trade.stop_loss) * trade.quantity * lot_size, 2)
                 db.add(StrategyTrade(
                     strategy_id=strategy.id,
                     agent_id=agent_id,
