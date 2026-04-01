@@ -62,19 +62,40 @@ class StrategyService:
             await db.flush()  # get strategy.id
 
             for trade in sorted(proposal.trades, key=lambda t: t.sequence):
+                # Resolve lot size
+                lot_size = 1
+                if trade.exchange == "NFO":
+                    from sol.services.option_chain_service import DEFAULT_LOT_SIZES
+                    for name, ls in DEFAULT_LOT_SIZES.items():
+                        if trade.symbol.startswith(name):
+                            lot_size = ls
+                            break
+                    if lot_size == 1:
+                        lot_size = 75  # safe fallback (NIFTY)
+
+                # Cap quantity so notional stays within available capital
+                qty = trade.quantity
+                if trade.entry_price and available_capital:
+                    entry = float(trade.entry_price)
+                    notional = entry * lot_size  # cost of 1 lot / 1 share
+                    if notional > 0:
+                        max_affordable_qty = int(available_capital / notional)
+                        if max_affordable_qty < 1 and notional <= available_capital * 2:
+                            max_affordable_qty = 1  # allow 1 if close enough
+                        if max_affordable_qty < 1:
+                            logger.warning(
+                                f"Trade {trade.symbol} unaffordable: 1 lot costs ₹{notional:.0f}, capital ₹{available_capital:.0f} — skipping"
+                            )
+                            continue
+                        if qty > max_affordable_qty:
+                            logger.info(
+                                f"Reducing {trade.symbol} qty from {qty} to {max_affordable_qty} lots (capital constraint: ₹{available_capital:.0f})"
+                            )
+                            qty = max_affordable_qty
+
                 risk = 0.0
                 if trade.entry_price and trade.stop_loss:
-                    # For F&O, risk must be scaled by lot size
-                    lot_size = 1
-                    if trade.exchange == "NFO":
-                        from sol.services.option_chain_service import DEFAULT_LOT_SIZES
-                        for name, ls in DEFAULT_LOT_SIZES.items():
-                            if trade.symbol.startswith(name):
-                                lot_size = ls
-                                break
-                        if lot_size == 1:
-                            lot_size = 75  # safe fallback (NIFTY)
-                    risk = round(abs(trade.entry_price - trade.stop_loss) * trade.quantity * lot_size, 2)
+                    risk = round(abs(float(trade.entry_price) - float(trade.stop_loss)) * qty * lot_size, 2)
                 db.add(StrategyTrade(
                     strategy_id=strategy.id,
                     agent_id=agent_id,
@@ -84,7 +105,7 @@ class StrategyService:
                     direction=trade.direction,
                     order_type=trade.order_type,
                     product_type=trade.product_type,
-                    quantity=trade.quantity,
+                    quantity=qty,
                     entry_price=trade.entry_price,
                     stop_loss=trade.stop_loss,
                     take_profit=trade.take_profit,
