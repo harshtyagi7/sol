@@ -48,14 +48,26 @@ class OrderManager:
         broker = self._get_broker()
         qty = risk_report.modified_quantity or proposal.quantity
 
+        # Zerodha API rejects plain MARKET orders on equity — convert to aggressive LIMIT
+        order_type = proposal.order_type
+        price = float(proposal.entry_price or 0.0)
+        if order_type == "MARKET" and proposal.exchange in ("NSE", "BSE") and price > 0:
+            order_type = "LIMIT"
+            # Aggressive limit: 0.5% above for buys, 0.5% below for sells to ensure fill
+            if proposal.direction == "BUY":
+                price = round(price * 1.005, 2)
+            else:
+                price = round(price * 0.995, 2)
+            logger.info(f"Converted MARKET to LIMIT @ ₹{price} for {proposal.symbol} (Zerodha API requirement)")
+
         order_id = broker.place_order(
             tradingsymbol=proposal.symbol,
             exchange=proposal.exchange,
             transaction_type=proposal.direction,
             quantity=qty,
-            order_type=proposal.order_type,
+            order_type=order_type,
             product=proposal.product_type,
-            price=proposal.entry_price or 0.0,
+            price=price,
             tag="SOL",
         )
 
