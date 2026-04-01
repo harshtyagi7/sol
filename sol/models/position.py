@@ -31,6 +31,10 @@ class Position(Base, TimestampMixin):
     # OPEN | CLOSED | SL_HIT | TP_HIT | SQUAREDOFF | EXPIRED
     status: Mapped[str] = mapped_column(String(20), default="OPEN", nullable=False)
 
+    kite_order_id: Mapped[Optional[str]] = mapped_column(String(50), nullable=True)
+    sl_order_id: Mapped[Optional[str]] = mapped_column(String(50), nullable=True)
+    tp_order_id: Mapped[Optional[str]] = mapped_column(String(50), nullable=True)
+
     opened_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
     closed_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
     close_price: Mapped[Optional[float]] = mapped_column(Numeric(12, 2), nullable=True)

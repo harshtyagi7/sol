@@ -101,6 +101,76 @@ class OrderManager:
         logger.info(f"Closed position: {close_direction} {quantity} {exchange}:{symbol} -> {order_id}")
         return order_id
 
+    async def place_sl_tp_orders(
+        self,
+        symbol: str,
+        exchange: str,
+        direction: str,        # original entry direction (BUY or SELL)
+        quantity: int,
+        product_type: str,
+        stop_loss: float,
+        take_profit: float,
+    ) -> tuple[Optional[str], Optional[str]]:
+        """
+        Place SL-M order and LIMIT TP order on Kite after entry.
+        Returns (sl_order_id, tp_order_id). None for paper mode.
+        """
+        from sol.core.trading_mode import get_paper_mode
+        if get_paper_mode():
+            return None, None
+
+        # Close direction is opposite of entry
+        close_direction = "BUY" if direction == "SELL" else "SELL"
+        tick = 0.05
+        broker = self._get_broker()
+        sl_order_id = None
+        tp_order_id = None
+
+        try:
+            sl_trigger = round(round(stop_loss / tick) * tick, 2)
+            sl_order_id = broker.place_order(
+                tradingsymbol=symbol,
+                exchange=exchange,
+                transaction_type=close_direction,
+                quantity=quantity,
+                order_type="SL-M",
+                product=product_type,
+                trigger_price=sl_trigger,
+                tag="SOL_SL",
+            )
+            logger.info(f"SL order placed: {sl_order_id} | {close_direction} {quantity} {symbol} trigger ₹{sl_trigger}")
+        except Exception as e:
+            logger.error(f"Failed to place SL order for {symbol}: {e}")
+
+        try:
+            tp_price = round(round(take_profit / tick) * tick, 2)
+            tp_order_id = broker.place_order(
+                tradingsymbol=symbol,
+                exchange=exchange,
+                transaction_type=close_direction,
+                quantity=quantity,
+                order_type="LIMIT",
+                product=product_type,
+                price=tp_price,
+                tag="SOL_TP",
+            )
+            logger.info(f"TP order placed: {tp_order_id} | {close_direction} {quantity} {symbol} @ ₹{tp_price}")
+        except Exception as e:
+            logger.error(f"Failed to place TP order for {symbol}: {e}")
+
+        return sl_order_id, tp_order_id
+
+    async def cancel_order_safe(self, order_id: str) -> None:
+        """Cancel a Kite order, ignoring errors (order may already be filled/cancelled)."""
+        try:
+            from sol.core.trading_mode import get_paper_mode
+            if get_paper_mode():
+                return
+            self._get_broker().cancel_order(order_id)
+            logger.info(f"Cancelled order {order_id}")
+        except Exception as e:
+            logger.warning(f"Could not cancel order {order_id}: {e}")
+
     async def get_order_fill_price(self, order_id: str) -> Optional[float]:
         """Fetch the actual average fill price from Kite for a completed order."""
         try:

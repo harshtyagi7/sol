@@ -213,18 +213,35 @@ async def _close_position(position, cur_price: float, pnl: float, status: str, r
     from sol.core.event_bus import publish_event  # type: ignore[import]
     from sqlalchemy import select  # type: ignore[import]
 
-    try:
-        om = get_order_manager()
-        await om.close_position(
-            symbol=position.symbol,
-            exchange=position.exchange,
-            quantity=position.quantity,
-            direction=position.direction,
-            product_type=position.product_type,
-        )
-    except Exception as e:
-        logger.error(f"[PositionMonitor] Failed to place close order for {position.symbol}: {e}")
-        return
+    om = get_order_manager()
+
+    # If SL was hit, the SL-M order on Kite already filled — cancel the TP order
+    # If TP was hit, the LIMIT TP order already filled — cancel the SL order
+    # If agent-triggered close, cancel both
+    sl_order_id = getattr(position, 'sl_order_id', None)
+    tp_order_id = getattr(position, 'tp_order_id', None)
+
+    if status == "SL_HIT" and tp_order_id:
+        await om.cancel_order_safe(tp_order_id)
+    elif status == "TP_HIT" and sl_order_id:
+        await om.cancel_order_safe(sl_order_id)
+    else:
+        # Agent/manual close — cancel both and place market close order
+        if sl_order_id:
+            await om.cancel_order_safe(sl_order_id)
+        if tp_order_id:
+            await om.cancel_order_safe(tp_order_id)
+        try:
+            await om.close_position(
+                symbol=position.symbol,
+                exchange=position.exchange,
+                quantity=position.quantity,
+                direction=position.direction,
+                product_type=position.product_type,
+            )
+        except Exception as e:
+            logger.error(f"[PositionMonitor] Failed to place close order for {position.symbol}: {e}")
+            return
 
     async with get_session() as db:
         result = await db.execute(select(Position).where(Position.id == position.id))

@@ -164,6 +164,8 @@ class StrategyExecutor:
                 trade.executed_at = datetime.now(IST)
 
                 # Create position record
+                sl = float(trade.stop_loss) if trade.stop_loss else None
+                tp = float(trade.take_profit) if trade.take_profit else None
                 position = Position(
                     proposal_id=trade_id,
                     agent_id=trade.agent_id,
@@ -175,15 +177,39 @@ class StrategyExecutor:
                     product_type=trade.product_type,
                     quantity=actual_qty,
                     avg_price=fill_price,
-                    current_price=fill_price,  # initialise so P&L shows 0 until first LTP update
-                    stop_loss=float(trade.stop_loss) if trade.stop_loss else None,
-                    take_profit=float(trade.take_profit) if trade.take_profit else None,
+                    current_price=fill_price,
+                    stop_loss=sl,
+                    take_profit=tp,
+                    kite_order_id=order_id,
                     opened_at=datetime.now(IST),
                     status="OPEN",
                 )
                 db.add(position)
                 await db.flush()
                 trade.position_id = position.id
+                position_id = position.id
+
+            # Place SL and TP orders on Kite (live mode only)
+            if trade.stop_loss and trade.take_profit:
+                try:
+                    sl_oid, tp_oid = await om.place_sl_tp_orders(
+                        symbol=trade.symbol,
+                        exchange=trade.exchange,
+                        direction=trade.direction,
+                        quantity=actual_qty,
+                        product_type=trade.product_type,
+                        stop_loss=float(trade.stop_loss),
+                        take_profit=float(trade.take_profit),
+                    )
+                    if sl_oid or tp_oid:
+                        async with get_session() as db:
+                            p_result = await db.execute(select(Position).where(Position.id == position_id))
+                            pos = p_result.scalar_one_or_none()
+                            if pos:
+                                pos.sl_order_id = sl_oid
+                                pos.tp_order_id = tp_oid
+                except Exception as e:
+                    logger.warning(f"Could not place SL/TP orders for {trade.symbol}: {e}")
 
             logger.info(
                 f"[Strategy '{strategy.name}'] Executed: "
