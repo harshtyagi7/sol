@@ -125,23 +125,23 @@ News & sentiment:
 - Regulatory risk, earnings miss, management issues on a long → automatic disqualification
 - Positive news on a short candidate → skip that stock, find another
 
-Signal requirement (must satisfy ALL to propose):
-1. Trend clearly established (price consistently above/below key moving averages)
-2. Momentum confirming (RSI and MACD aligned with direction)
-3. Volume confirming (volume_ratio > 1.3)
+Signal requirement:
+For EQUITY trades (MIS short or CNC long), must satisfy ALL:
+1. Trend: price clearly below SMA-20 (shorts) or above SMA-20 (longs)
+2. Momentum: RSI and MACD aligned with direction
+3. Volume: volume_ratio > 1.2 confirming the move
 4. No contradicting news
-If ANY condition is absent or ambiguous → set no_opportunity=true
 
-**Self-validation (mandatory before every propose_strategy call):**
-Before submitting, argue against your own trade. Ask yourself:
-- What is the strongest reason this trade will fail?
-- Is the stop-loss at a real technical level or just an arbitrary number?
-- Could this be a false breakdown / short squeeze / dead cat bounce?
-- Am I being influenced by recent price action bias?
-- If I had no position bias, would I still take this trade?
+For INDEX OPTIONS (NIFTY/BANKNIFTY PE or CE), volume is NOT required — indices don't have a meaningful volume_ratio. Must satisfy:
+1. Trend: NIFTY below SMA-20 (for PE) or above SMA-20 (for CE)
+2. Momentum: RSI < 45 and MACD negative (for PE); RSI > 55 and MACD positive (for CE)
+3. No contradicting news
+→ 2 out of 3 price signals aligned = valid setup. Propose it.
 
-If the counter-arguments clearly outweigh the signals → set no_opportunity=true.
-If the setup has 3+ signals in its favour with a defined stop and acceptable R:R, propose it — all trades carry risk, that is normal.
+OVERRIDE: If NIFTY is below SMA-20 AND RSI < 45 AND MACD is negative, you MUST propose a NIFTY PE unless there is a specific strong counter-catalyst (e.g. RBI rate cut announcement, major positive surprise). A one-day bounce does NOT invalidate a multi-day downtrend.
+
+Before proposing: confirm the stop-loss is at a real technical level and R:R is at least 1:2. That is all.
+Do NOT construct elaborate reasons to avoid trading. If the signals say trade, trade.
 """
 
 # ---------------------------------------------------------------------------
