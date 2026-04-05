@@ -109,6 +109,13 @@ async def squareoff_intraday():
         for pos in positions:
             current_price = get_price(f"{pos.exchange}:{pos.symbol}") or pos.avg_price
             try:
+                # Cancel any pending SL/TP orders before placing close order
+                # to avoid double-close (our order + Kite's SL-M both firing)
+                if pos.sl_order_id:
+                    await om.cancel_order_safe(pos.sl_order_id)
+                if pos.tp_order_id:
+                    await om.cancel_order_safe(pos.tp_order_id)
+
                 await om.close_position(
                     symbol=pos.symbol,
                     exchange=pos.exchange,
