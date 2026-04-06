@@ -180,6 +180,39 @@ REJECT if: vague thesis, missing SL, poor R:R, or generic bounce play with no ed
             logger.warning(f"[{self.name}] Review failed for '{proposal.name}': {e} — auto-approving")
             return True, f"Review error: {e}"
 
+    async def validate_entry(self, trade: dict, current_price: float, minutes_since_proposal: float) -> tuple[bool, str]:
+        """Re-validate entry at execution time. See claude_agent for full logic."""
+        proposed_entry = float(trade.get("entry_price") or current_price)
+        price_drift_pct = abs(current_price - proposed_entry) / proposed_entry * 100 if proposed_entry else 0
+        sl = trade.get("stop_loss")
+        tp = trade.get("take_profit")
+        direction = trade.get("direction", "BUY")
+        if sl:
+            sl_f = float(sl)
+            if direction == "BUY" and current_price <= sl_f:
+                return False, f"Price ₹{current_price:.2f} already breached SL ₹{sl_f:.2f}"
+            if direction == "SELL" and current_price >= sl_f:
+                return False, f"Price ₹{current_price:.2f} already breached SL ₹{sl_f:.2f}"
+        if tp:
+            tp_f = float(tp)
+            if direction == "BUY" and current_price >= tp_f:
+                return False, f"Price ₹{current_price:.2f} already hit TP ₹{tp_f:.2f}"
+            if direction == "SELL" and current_price <= tp_f:
+                return False, f"Price ₹{current_price:.2f} already hit TP ₹{tp_f:.2f}"
+        if price_drift_pct > 1.5 or minutes_since_proposal > 10:
+            from openai import AsyncOpenAI
+            client = AsyncOpenAI(api_key=self._api_key)
+            prompt = f"A {direction} trade on {trade.get('symbol')} was proposed {minutes_since_proposal:.0f}m ago. Proposed entry ₹{proposed_entry:.2f}, now ₹{current_price:.2f} ({price_drift_pct:+.2f}% drift). SL ₹{sl}, TP ₹{tp}. Thesis: {trade.get('rationale','unknown')}. Is entry still valid? Reply: VALID: <reason> or INVALID: <reason>"
+            try:
+                resp = await client.chat.completions.create(model=self.model_id, max_tokens=80, messages=[{"role": "user", "content": prompt}])
+                verdict = resp.choices[0].message.content.strip()
+                valid = verdict.upper().startswith("VALID")
+                reason = verdict.split(":", 1)[-1].strip() if ":" in verdict else verdict
+                return valid, reason
+            except Exception as e:
+                return True, f"Validation failed ({e}), proceeding"
+        return True, f"Price within tolerance ({price_drift_pct:.2f}% drift)"
+
     async def should_exit(self, position: dict, symbol_context: str) -> tuple[bool, str]:
         """Ask GPT whether to exit an open position."""
         pnl = position.get("unrealized_pnl", 0)

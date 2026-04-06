@@ -362,6 +362,82 @@ REJECTED: <one sentence reason>"""
             logger.warning(f"[{self.name}] Review failed for '{proposal.name}': {e} — auto-approving")
             return True, f"Review error: {e}"
 
+    async def validate_entry(
+        self,
+        trade: dict,
+        current_price: float,
+        minutes_since_proposal: float,
+    ) -> tuple[bool, str]:
+        """
+        Re-validate a trade entry at execution time.
+        Called after user approval to check if the setup still holds.
+        Returns (valid, reason).
+        """
+        proposed_entry = float(trade.get("entry_price") or current_price)
+        price_drift_pct = abs(current_price - proposed_entry) / proposed_entry * 100 if proposed_entry else 0
+        sl = trade.get("stop_loss")
+        tp = trade.get("take_profit")
+        direction = trade.get("direction", "BUY")
+
+        # Hard reject: price has moved so far that SL is already violated
+        if sl:
+            sl_f = float(sl)
+            if direction == "BUY" and current_price <= sl_f:
+                return False, f"Price ₹{current_price:.2f} has already breached stop-loss ₹{sl_f:.2f} — trade invalidated"
+            if direction == "SELL" and current_price >= sl_f:
+                return False, f"Price ₹{current_price:.2f} has already breached stop-loss ₹{sl_f:.2f} — trade invalidated"
+
+        # Hard reject: price has already hit TP (missed the move)
+        if tp:
+            tp_f = float(tp)
+            if direction == "BUY" and current_price >= tp_f:
+                return False, f"Price ₹{current_price:.2f} already reached take-profit ₹{tp_f:.2f} — entry opportunity missed"
+            if direction == "SELL" and current_price <= tp_f:
+                return False, f"Price ₹{current_price:.2f} already reached take-profit ₹{tp_f:.2f} — entry opportunity missed"
+
+        # If price drifted >1.5% and it's been more than 10 minutes, ask the LLM
+        if price_drift_pct > 1.5 or minutes_since_proposal > 10:
+            prompt = f"""A trade was proposed {minutes_since_proposal:.0f} minutes ago and is about to execute now.
+Decide if the entry is still valid given the current price.
+
+Trade: {direction} {trade.get('quantity')} {trade.get('exchange')}:{trade.get('symbol')}
+Proposed entry: ₹{proposed_entry:.2f}
+Current price:  ₹{current_price:.2f}  ({price_drift_pct:+.2f}% drift)
+Stop-loss:      ₹{sl or 'not set'}
+Take-profit:    ₹{tp or 'not set'}
+Original thesis: {trade.get('rationale', 'unknown')}
+
+Rules:
+- VALID if price drift is within normal noise AND thesis still likely holds
+- INVALID if price has moved significantly against the setup, risk:reward is now poor, or the original trigger is clearly gone
+- When in doubt with large time elapsed, prefer INVALID to protect capital
+
+Reply strictly on one line:
+VALID: <one sentence reason>
+  or
+INVALID: <one sentence reason>"""
+
+            client = self._get_client()
+            try:
+                response = await client.messages.create(
+                    model=self.model_id,
+                    max_tokens=80,
+                    messages=[{"role": "user", "content": prompt}],
+                )
+                verdict = response.content[0].text.strip()
+                valid = verdict.upper().startswith("VALID")
+                reason = verdict.split(":", 1)[-1].strip() if ":" in verdict else verdict
+                logger.info(
+                    f"[{self.name}] Entry validation {trade.get('symbol')}: "
+                    f"{'VALID' if valid else 'INVALID'} — {reason}"
+                )
+                return valid, reason
+            except Exception as e:
+                logger.warning(f"[{self.name}] validate_entry failed for {trade.get('symbol')}: {e} — allowing")
+                return True, f"Validation check failed ({e}), proceeding"
+
+        return True, f"Price within tolerance (drift {price_drift_pct:.2f}%, {minutes_since_proposal:.0f}m since proposal)"
+
     async def should_exit(self, position: dict, symbol_context: str) -> tuple[bool, str]:
         """Ask Claude whether to exit an open position."""
         pnl = position.get("unrealized_pnl", 0)

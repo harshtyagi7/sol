@@ -116,6 +116,64 @@ class StrategyExecutor:
                 })
                 return
 
+            # --- Pre-execution entry validation ---
+            # Ask the originating agent if the setup still holds at current price.
+            # This matters when the user approves a strategy long after it was proposed.
+            try:
+                from sol.agents.agent_manager import get_agent_manager
+                from sol.broker.kite_client import get_kite_client
+                from sol.broker.price_store import get_price
+
+                # Get current price
+                current_price = get_price(f"{trade.exchange}:{trade.symbol}")
+                if not current_price:
+                    kite = get_kite_client()
+                    if kite.is_authenticated():
+                        key = f"{trade.exchange}:{trade.symbol}"
+                        ltp_data = kite.get_ltp([key])
+                        current_price = ltp_data.get(key, {}).get("last_price")
+
+                if current_price and trade.entry_price:
+                    # Minutes elapsed since strategy was proposed
+                    minutes_elapsed = 0.0
+                    if strategy.proposed_at:
+                        from datetime import timezone as _tz
+                        now_utc = datetime.now(IST).astimezone(_tz.utc)
+                        proposed_utc = strategy.proposed_at
+                        if proposed_utc.tzinfo is None:
+                            proposed_utc = proposed_utc.replace(tzinfo=_tz.utc)
+                        minutes_elapsed = (now_utc - proposed_utc).total_seconds() / 60
+
+                    agent = get_agent_manager().get_agent(strategy.agent_id)
+                    if agent and hasattr(agent, "validate_entry"):
+                        trade_dict = {
+                            "symbol": trade.symbol,
+                            "exchange": trade.exchange,
+                            "direction": trade.direction,
+                            "quantity": trade.quantity,
+                            "entry_price": float(trade.entry_price),
+                            "stop_loss": float(trade.stop_loss) if trade.stop_loss else None,
+                            "take_profit": float(trade.take_profit) if trade.take_profit else None,
+                            "rationale": trade.rationale,
+                        }
+                        valid, reason = await agent.validate_entry(trade_dict, float(current_price), minutes_elapsed)
+                        if not valid:
+                            trade.status = "SKIPPED"
+                            trade.skip_reason = f"Entry invalidated at execution: {reason}"
+                            await db.flush()
+                            logger.warning(f"[Strategy '{strategy.name}'] {trade.symbol} entry rejected: {reason}")
+                            await publish_event("strategy_trade_skipped", {
+                                "strategy_id": strategy_id,
+                                "strategy_name": strategy.name,
+                                "symbol": trade.symbol,
+                                "reason": trade.skip_reason,
+                            })
+                            return
+                        else:
+                            logger.info(f"[Strategy '{strategy.name}'] {trade.symbol} entry validated: {reason}")
+            except Exception as e:
+                logger.warning(f"Pre-execution validation error for {trade.symbol}: {e} — proceeding anyway")
+
             # Execute
             trade.status = "EXECUTING"
             await db.flush()
