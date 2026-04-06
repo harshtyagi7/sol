@@ -137,7 +137,7 @@ async def squareoff_intraday():
 async def _close_position(db, position, close_price: float, status: str):
     """Update position to closed state and notify strategy executor if applicable."""
     multiplier = 1 if position.direction == "BUY" else -1
-    realized_pnl = multiplier * (close_price - position.avg_price) * position.quantity
+    realized_pnl = multiplier * (float(close_price) - float(position.avg_price)) * int(position.quantity)
 
     position.status = status
     position.close_price = close_price
