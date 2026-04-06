@@ -6,7 +6,6 @@ Handles EOD square-off for intraday positions.
 
 import logging
 from datetime import datetime
-from typing import Optional
 
 import pytz
 
@@ -122,6 +121,7 @@ async def squareoff_intraday():
                     quantity=pos.quantity,
                     direction=pos.direction,
                     product_type=pos.product_type,
+                    current_price=float(current_price),
                 )
                 await _close_position(db, pos, current_price, "CLOSED")
             except Exception as e:

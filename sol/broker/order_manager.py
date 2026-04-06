@@ -85,20 +85,34 @@ class OrderManager:
         quantity: int,
         direction: str,  # original direction — we sell/buy opposite
         product_type: str,
+        current_price: float = 0.0,
     ) -> str:
         """Close an open position by placing the reverse trade."""
         broker = self._get_broker()
         close_direction = "SELL" if direction == "BUY" else "BUY"
+
+        # Zerodha rejects plain MARKET orders on equity — use aggressive LIMIT
+        order_type = "MARKET"
+        price = current_price
+        if exchange in ("NSE", "BSE") and price > 0:
+            order_type = "LIMIT"
+            tick = 0.05
+            if close_direction == "BUY":
+                price = round(round(price * 1.005 / tick) * tick, 2)
+            else:
+                price = round(round(price * 0.995 / tick) * tick, 2)
+
         order_id = broker.place_order(
             tradingsymbol=symbol,
             exchange=exchange,
             transaction_type=close_direction,
             quantity=quantity,
-            order_type="MARKET",
+            order_type=order_type,
             product=product_type,
+            price=price,
             tag="SOL_CLOSE",
         )
-        logger.info(f"Closed position: {close_direction} {quantity} {exchange}:{symbol} -> {order_id}")
+        logger.info(f"Closed position: {close_direction} {quantity} {exchange}:{symbol} @ ₹{price} -> {order_id}")
         return order_id
 
     async def place_sl_tp_orders(

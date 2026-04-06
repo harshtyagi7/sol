@@ -65,6 +65,7 @@ async def close_position(position_id: str):
             quantity=pos.quantity,
             direction=pos.direction,
             product_type=pos.product_type,
+            current_price=float(current_price),
         )
         await _close_position(db, pos, current_price, "CLOSED")
         await db.flush()

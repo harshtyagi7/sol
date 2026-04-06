@@ -238,6 +238,7 @@ async def _close_position(position, cur_price: float, pnl: float, status: str, r
                 quantity=position.quantity,
                 direction=position.direction,
                 product_type=position.product_type,
+                current_price=cur_price,
             )
         except Exception as e:
             logger.error(f"[PositionMonitor] Failed to place close order for {position.symbol}: {e}")
