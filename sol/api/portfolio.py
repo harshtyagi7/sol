@@ -129,9 +129,22 @@ async def sync_positions_from_kite():
 
     IST = pytz.timezone("Asia/Kolkata")
 
+    # Always reload the latest token from DB to handle re-logins
+    from sol.database import get_session as _gs
+    from sol.models.session import KiteSession
+    from sol.utils.encryption import decrypt
+    from sol.config import get_settings
+    from sqlalchemy import select as _sel
+    _settings = get_settings()
+    async with _gs() as _db:
+        _result = await _db.execute(
+            _sel(KiteSession).where(KiteSession.is_valid == True).order_by(KiteSession.created_at.desc()).limit(1)
+        )
+        _session = _result.scalar_one_or_none()
+    if not _session:
+        raise HTTPException(status_code=400, detail="Kite not authenticated — please login first")
     client = get_kite_client()
-    if not client.is_authenticated():
-        raise HTTPException(status_code=400, detail="Kite not authenticated")
+    client.set_access_token(decrypt(_session.access_token_encrypted, _settings.SECRET_KEY))
 
     # Fetch Kite's current position snapshot
     try:
