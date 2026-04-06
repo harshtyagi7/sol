@@ -12,7 +12,7 @@ IST = pytz.timezone("Asia/Kolkata")
 MARKET_OPEN = time(9, 15)
 MARKET_CLOSE = time(15, 30)
 PRE_MARKET_OPEN = time(9, 0)
-INTRADAY_SQUAREOFF = time(15, 15)  # Square off intraday before close
+INTRADAY_SQUAREOFF = time(15, 20)  # Square off intraday before close (matches scheduler)
 
 
 def now_ist() -> datetime:
