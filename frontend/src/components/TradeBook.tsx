@@ -15,23 +15,20 @@ function duration(openedAt: string, closedAt: string | null): string {
   return `${Math.floor(hrs / 24)}d`
 }
 
-/** Zerodha auto-squares at 3:30 PM IST. If our DB shows SQUAREDOFF and closed_at is after 3:25 PM, likely Zerodha did it. */
-function isLikelyZerodhaSqOff(trade: any): boolean {
-  if (trade.status !== 'SQUAREDOFF') return false
-  if (!trade.closed_at) return false
-  const closed = new Date(trade.closed_at)
-  // Convert to IST offset check: 3:25 PM IST = 09:55 UTC
-  const utcHour = closed.getUTCHours()
-  const utcMin = closed.getUTCMinutes()
-  return utcHour > 9 || (utcHour === 9 && utcMin >= 55)
+/**
+ * SQUAREDOFF = Zerodha's RMS auto-squared the position (₹59 charge).
+ * CLOSED = Sol placed the close order at 3:20 PM (no extra charge).
+ */
+function isZerodhaSqOff(trade: any): boolean {
+  return trade.status === 'SQUAREDOFF'
 }
 
 const STATUS_LABEL: Record<string, { label: string; color: string }> = {
-  SL_HIT:     { label: 'SL Hit',      color: 'text-red-400 bg-red-900/30' },
-  TP_HIT:     { label: 'TP Hit',      color: 'text-green-400 bg-green-900/30' },
-  SQUAREDOFF: { label: 'Squared Off', color: 'text-blue-400 bg-blue-900/30' },
-  CLOSED:     { label: 'Closed',      color: 'text-gray-400 bg-gray-800' },
-  EXPIRED:    { label: 'Expired',     color: 'text-yellow-400 bg-yellow-900/30' },
+  SL_HIT:     { label: 'SL Hit',       color: 'text-red-400 bg-red-900/30' },
+  TP_HIT:     { label: 'TP Hit',       color: 'text-green-400 bg-green-900/30' },
+  SQUAREDOFF: { label: 'Auto Sq-Off',  color: 'text-yellow-400 bg-yellow-900/30' },
+  CLOSED:     { label: 'Squared Off',  color: 'text-blue-400 bg-blue-900/30' },
+  EXPIRED:    { label: 'Expired',      color: 'text-gray-400 bg-gray-800' },
 }
 
 function DirectionBadge({ direction }: { direction: string }) {
@@ -45,7 +42,7 @@ function DirectionBadge({ direction }: { direction: string }) {
 }
 
 function ChargesDetail({ trade }: { trade: any }) {
-  const autoSqOff = isLikelyZerodhaSqOff(trade)
+  const autoSqOff = isZerodhaSqOff(trade)
   const charges = calculateCharges(
     trade.avg_price,
     trade.close_price ?? trade.avg_price,
@@ -116,7 +113,7 @@ function TradeRow({ t }: { t: any }) {
   const [expanded, setExpanded] = useState(false)
   const pnl = t.realized_pnl
   const statusInfo = STATUS_LABEL[t.status] || { label: t.status, color: 'text-gray-400 bg-gray-800' }
-  const autoSqOff = isLikelyZerodhaSqOff(t)
+  const autoSqOff = isZerodhaSqOff(t)
 
   const charges = t.close_price != null ? calculateCharges(
     t.avg_price, t.close_price, t.quantity, t.direction,
@@ -351,7 +348,7 @@ function ClosedTrades() {
   const totalCharges = trades.reduce((s: number, t: any) => {
     if (t.close_price == null) return s
     return s + calculateCharges(t.avg_price, t.close_price, t.quantity, t.direction,
-      t.product_type ?? 'MIS', t.exchange ?? 'NSE', isLikelyZerodhaSqOff(t)).total
+      t.product_type ?? 'MIS', t.exchange ?? 'NSE', isZerodhaSqOff(t)).total
   }, 0)
   const totalNetPnl = totalGrossPnl - totalCharges
   const wins = trades.filter((t: any) => (t.realized_pnl ?? 0) > 0).length

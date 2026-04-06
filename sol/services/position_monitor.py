@@ -123,7 +123,7 @@ async def squareoff_intraday():
                     direction=pos.direction,
                     product_type=pos.product_type,
                 )
-                await _close_position(db, pos, current_price, "SQUAREDOFF")
+                await _close_position(db, pos, current_price, "CLOSED")
             except Exception as e:
                 logger.error(f"Failed to square off {pos.symbol}: {e}")
 
