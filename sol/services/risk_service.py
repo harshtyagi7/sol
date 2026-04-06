@@ -37,23 +37,26 @@ class RiskService:
     async def _get_daily_pnl(self) -> float:
         from sol.database import get_session
         from sol.models.position import Position
+        from sol.core.trading_mode import get_paper_mode
         from sqlalchemy import select, func
         from datetime import datetime
         import pytz
         IST = pytz.timezone("Asia/Kolkata")
         today = datetime.now(IST).date()
+        is_virtual = get_paper_mode()
 
         async with get_session() as db:
             result = await db.execute(
                 select(func.sum(Position.realized_pnl)).where(
                     func.date(Position.closed_at) == today,
                     Position.status != "OPEN",
+                    Position.is_virtual == is_virtual,
                 )
             )
             realized = result.scalar() or 0.0
 
             result2 = await db.execute(
-                select(Position).where(Position.status == "OPEN")
+                select(Position).where(Position.status == "OPEN", Position.is_virtual == is_virtual)
             )
             open_positions = result2.scalars().all()
             unrealized = sum(p.unrealized_pnl for p in open_positions)
@@ -63,11 +66,16 @@ class RiskService:
     async def _get_open_position_count(self) -> int:
         from sol.database import get_session
         from sol.models.position import Position
+        from sol.core.trading_mode import get_paper_mode
         from sqlalchemy import select, func
+        is_virtual = get_paper_mode()
 
         async with get_session() as db:
             result = await db.execute(
-                select(func.count()).select_from(Position).where(Position.status == "OPEN")
+                select(func.count()).select_from(Position).where(
+                    Position.status == "OPEN",
+                    Position.is_virtual == is_virtual,
+                )
             )
             return result.scalar() or 0
 

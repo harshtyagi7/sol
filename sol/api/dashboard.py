@@ -11,7 +11,6 @@ async def get_dashboard():
     from sol.broker.order_manager import get_order_manager
     from sol.agents.agent_manager import get_agent_manager
     from sol.services.risk_service import get_risk_service
-    from sol.config import get_settings
     from sol.utils.market_hours import market_status_str, is_market_open
     from sol.database import get_session
     from sol.models.position import Position
@@ -22,17 +21,20 @@ async def get_dashboard():
     IST = pytz.timezone("Asia/Kolkata")
     today = datetime.now(IST).date()
 
-    settings = get_settings()
+    from sol.core.trading_mode import get_paper_mode
     om = get_order_manager()
     risk_service = get_risk_service()
+    is_virtual = get_paper_mode()
 
     available_capital = om.get_available_capital()
     risk_summary = await risk_service.get_exposure_report()
     agent_performance = await get_agent_manager().get_all_performance()
 
     async with get_session() as db:
-        # Open positions
-        result = await db.execute(select(Position).where(Position.status == "OPEN"))
+        # Open positions — filtered by current mode
+        result = await db.execute(
+            select(Position).where(Position.status == "OPEN", Position.is_virtual == is_virtual)
+        )
         open_positions = result.scalars().all()
 
         # Pending proposals
@@ -50,10 +52,11 @@ async def get_dashboard():
         )
         executed_today = result3.scalar() or 0
 
-        # Today's P&L
+        # Today's P&L — filtered by current mode
         result4 = await db.execute(
             select(func.sum(Position.realized_pnl)).where(
-                func.date(Position.closed_at) == today
+                func.date(Position.closed_at) == today,
+                Position.is_virtual == is_virtual,
             )
         )
         realized_pnl = float(result4.scalar() or 0)
@@ -66,7 +69,7 @@ async def get_dashboard():
             "is_open": is_market_open(),
             "time_ist": datetime.now(IST).strftime("%H:%M:%S"),
         },
-        "mode": "PAPER" if settings.PAPER_TRADING_MODE else "LIVE",
+        "mode": "PAPER" if is_virtual else "LIVE",
         "portfolio": {
             "available_capital": available_capital,
             "open_positions": len(open_positions),
